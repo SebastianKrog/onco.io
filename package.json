@@ -1,0 +1,12 @@
+{
+  "name": "onco-io",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A multiplayer HTML5 browser game about developing anti-cancer products.",
+  "type": "module",
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node --test",
+    "test:coverage": "node --test --experimental-test-coverage"
+  }
+}
