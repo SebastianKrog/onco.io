@@ -14,11 +14,12 @@
     <aside class="panel controls">
       <h2>Budget allocation</h2><div id="allocations"></div>
       <h2>Treatment</h2><div id="treatments"></div>
-      <h2>Commit stockpile</h2><label class="commit"><input id="commitment" type="range" min="5" max="100" value="40"><output id="commit-output">40%</output></label>
+      <h2>Commit local supply</h2><label class="commit"><input id="commitment" type="range" min="10" max="100" step="5" value="50"><output id="commit-output">50%</output></label>
+      <div class="shortcuts"><button data-commit="25">25%</button><button data-commit="50">50%</button><button data-commit="75">75%</button></div>
       <div id="company"></div>
     </aside>
     <section class="map-wrap"><canvas id="map" width="1120" height="700"></canvas><div id="instruction">Click an unclaimed region to establish your foothold.</div><div class="profile-key"><i class="solid"></i> Solid <i class="blood"></i> Blood <i class="rare"></i> Rare <i class="mixed"></i> Mixed</div></section>
-    <aside class="panel"><h2>Network leaders</h2><ol id="leaders"></ol><h2>Region intelligence</h2><div id="intel">Select a region.</div><div id="victory">Hold 60% for 1 minute or lead when time expires.</div></aside>
+    <aside class="panel"><h2>Network leaders</h2><ol id="leaders"></ol><h2>Region intelligence</h2><div id="intel">Select a region.</div><h2>Research programme</h2><div id="research"></div><div id="victory">Hold 60% continuously for 60 seconds, be last standing, or lead at 12:00.</div></aside>
   </main>
   <script type="module" src="/client.js"></script>
 </body></html>
