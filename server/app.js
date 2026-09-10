@@ -26,7 +26,11 @@ export function createApp({ game = new Game(), tickRate = 50 } = {}) {
   const frame = message => {
     const payload = Buffer.from(message);
     if (payload.length < 126) return Buffer.concat([Buffer.from([0x81, payload.length]), payload]);
-    const header = Buffer.alloc(4); header[0] = 0x81; header[1] = 126; header.writeUInt16BE(payload.length, 2);
+    if (payload.length <= 0xffff) {
+      const header = Buffer.alloc(4); header[0] = 0x81; header[1] = 126; header.writeUInt16BE(payload.length, 2);
+      return Buffer.concat([header, payload]);
+    }
+    const header = Buffer.alloc(10); header[0] = 0x81; header[1] = 127; header.writeBigUInt64BE(BigInt(payload.length), 2);
     return Buffer.concat([header, payload]);
   };
   const send = (socket, data) => { if (!socket.destroyed) socket.write(frame(data)); };
@@ -57,7 +61,7 @@ export function createApp({ game = new Game(), tickRate = 50 } = {}) {
         if (opcode === 1) {
           try {
             const message = JSON.parse(body.toString());
-            game.handle(player.id, message);
+            if (!game.handle(player.id, message)) send(socket, JSON.stringify({ type: 'rejected', commandId: message.commandId ?? null, reason: game.lastRejection }));
           } catch { send(socket, JSON.stringify({ type: 'error', message: 'Invalid message' })); }
         }
       }

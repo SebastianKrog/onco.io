@@ -7,6 +7,6 @@
   "scripts": {
     "start": "node server/index.js",
     "test": "node --test",
-    "test:coverage": "node --test --experimental-test-coverage"
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-lines=95 --test-coverage-branches=80 --test-coverage-functions=80"
   }
 }

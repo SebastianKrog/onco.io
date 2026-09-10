@@ -1,164 +1,124 @@
 import { randomUUID } from 'node:crypto';
 
-export const MAP = { columns: 8, rows: 5 };
+export const STEP = 0.25;
+export const MAP = { columns: 16, rows: 10 };
 export const PROFILES = ['solid', 'blood', 'rare', 'mixed'];
+export const BALANCE_VERSION = '0.2';
 export const TREATMENTS = {
-  medicine: { label: 'Medicines', unlock: 0, cost: 1, speed: 1.25, control: 1, match: null },
-  radiotherapy: { label: 'Radiotherapy', unlock: 35, cost: 2, speed: 0.75, control: 1.65, match: 'solid' },
-  targeted: { label: 'Targeted therapy', unlock: 65, cost: 3, speed: 1, control: 1.15, match: 'focus' },
-  vaccine: { label: 'Therapeutic vaccine', unlock: 100, cost: 4, speed: 0.55, control: 2.1, match: null }
+  medicine: { id: 'MED', label: 'Basic medicines', cost: 1, level: 0, edgeTime: 3 },
+  radiotherapy: { id: 'RAD', label: 'Radiotherapy capacity', cost: 2, level: 1, edgeTime: 5 },
+  targeted: { id: 'TGT', label: 'Targeted therapies', cost: 2.5, level: 1, edgeTime: 3 },
+  immunotherapy: { id: 'IMM', label: 'Immunotherapy', cost: 3, level: 2, edgeTime: 4 },
+  vaccine: { id: 'VAC', label: 'Therapeutic vaccines', cost: 4, level: 2, edgeTime: 5 }
 };
-
-const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+export const RESEARCH = {
+  R01: ['Manufacturing scale-up', null, 140, 40], R02: ['Optimized protocols', null, 80, 25],
+  R03: ['Molecular diagnostics', null, 100, 30], R04: ['Targeted platform', 'R03', 180, 45],
+  R05: ['Second indication', 'R04', 360, 120], R06: ['Radiation planning', null, 140, 35],
+  R07: ['Image guidance', 'R06', 360, 120], R08: ['Immune engineering', 'R03', 220, 55],
+  R09: ['Therapeutic vaccine platform', 'R08', 260, 65], R10: ['Immune memory programme', 'R09', 360, 120],
+  R11: ['Cold-chain logistics', 'R01', 140, 35], R12: ['Network scheduling', 'R11', 220, 55]
+};
+export const DEFAULT_RESEARCH = ['R02','R03','R04','R01','R06','R11','R08','R09','R12','R05','R07','R10'];
+const KEYS = Object.keys(TREATMENTS);
+const emptyInventory = () => Object.fromEntries(KEYS.map(key => [key, 0]));
+const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 const cleanName = name => String(name ?? '').replace(/[^\p{L}\p{N} ._-]/gu, '').trim().slice(0, 18) || 'Researcher';
+const finite = value => Number.isFinite(Number(value));
+
+function neighbours(id, columns = MAP.columns, rows = MAP.rows) {
+  const row = Math.floor(id / columns), col = id % columns;
+  const deltas = row % 2 ? [[-1,0],[1,0],[0,-1],[1,-1],[0,1],[1,1]] : [[-1,0],[1,0],[-1,-1],[0,-1],[-1,1],[0,1]];
+  return deltas.map(([dc,dr]) => [col + dc, row + dr]).filter(([c,r]) => c >= 0 && c < columns && r >= 0 && r < rows).map(([c,r]) => r * columns + c).sort((a,b)=>a-b);
+}
+
+export function treatmentForce(player, key, profile, defending = false) {
+  const base = TREATMENTS[key].cost;
+  let multiplier = key === 'radiotherapy' ? ({ solid:1.35,blood:.55,rare:.85,mixed:1 }[profile]) : key === 'immunotherapy' ? (profile === 'mixed' ? 1.35 : 1.25) : key === 'vaccine' ? .7 : 1;
+  if (key === 'targeted') multiplier = player.targetedIndications.includes(profile) ? 1.6 : .75;
+  if (key === 'medicine' && player.completed.includes('R02')) multiplier *= 1.15;
+  if (key === 'medicine' && player.completed.includes('R03') && profile === player.specialty) multiplier *= 1.05;
+  if (key === 'radiotherapy' && defending) multiplier *= player.completed.includes('R07') ? 1.3 : 1.15;
+  return base * multiplier;
+}
 
 export class Game {
-  constructor({ random = Math.random, id = randomUUID, matchSeconds = 12 * 60 } = {}) {
-    this.random = random;
-    this.id = id;
-    this.matchSeconds = matchSeconds;
-    this.elapsed = 0;
-    this.players = new Map();
-    this.contests = new Map();
-    this.winner = null;
-    this.holdLeader = null;
-    this.holdSeconds = 0;
-    this.regions = Array.from({ length: MAP.columns * MAP.rows }, (_, id) => ({
-      id, column: id % MAP.columns, row: Math.floor(id / MAP.columns),
-      profile: PROFILES[id % PROFILES.length], ownerId: null, strength: 18, infrastructure: 0
-    }));
+  constructor({ random = Math.random, id = randomUUID, matchSeconds = 720, columns = 16, rows = 10 } = {}) {
+    this.random=random; this.id=id; this.matchSeconds=matchSeconds; this.elapsed=0; this.accumulator=0; this.players=new Map();
+    this.convoys=[]; this.commands=[]; this.commandIds=new Set(); this.sequence=0; this.winner=null; this.result=null; this.holdLeader=null; this.holdSeconds=0;
+    this.map={ columns, rows }; this.regions=Array.from({length:columns*rows},(_,id)=>({ id, name:`Region ${id+1}`, column:id%columns,row:Math.floor(id/columns), neighbours:neighbours(id,columns,rows), profile:PROFILES[id%4], ownerId:null, level:0, upgradeProgress:0, inventories:emptyInventory(), protection:30, quietTime:0, acquiredAt:null, commissionedUntil:0, dispatchAvailableAt:0, programme:null, developmentPin:false, productionPin:false, campaigns:{} }));
+    this.contests=new Map();
   }
 
-  addPlayer(name = 'Researcher') {
-    const player = {
-      id: this.id(), name: cleanName(name), color: `hsl(${Math.floor(this.random() * 360)} 70% 58%)`,
-      started: false, focus: null, revenue: 0, research: 0,
-      stock: { medicine: 20, radiotherapy: 0, targeted: 0, vaccine: 0 },
-      unlocked: ['medicine'], allocation: { research: 34, manufacturing: 33, infrastructure: 33 },
-      selectedTreatment: 'medicine'
-    };
-    this.players.set(player.id, player);
-    return player;
+  addPlayer(name='Researcher') {
+    const inventory=emptyInventory(); inventory.medicine=0;
+    const p={ id:this.id(),name:cleanName(name),color:`hsl(${Math.floor(this.random()*360)} 70% 58%)`,initials:'',started:false,eliminated:false,bot:false,surrendered:false,specialty:null,focus:null,
+      allocation:{research:20,manufacturing:65,infrastructure:15},pendingAllocation:null,researchBank:0,infrastructureBank:0,revenue:0,gross:0,upkeep:0,net:0,research:0,researchQueue:[...DEFAULT_RESEARCH],researchProgress:{},completed:[],priorityAvailableAt:0,targetedIndications:[],selectedTreatment:'medicine',manufacturingAvailableAt:0,
+      stock:inventory,unlocked:['medicine'],commitment:50,filter:'all',production:0,unusedManufacturing:0,overflow:0,regionSeconds:0,productionPin:null,developmentPin:null,
+      connected:true,disconnectedAt:null,nextBotAt:0,researchSpend:0,infrastructureSpend:0,manufacturingSpend:0 };
+    p.initials=p.name.split(/\s+/).map(x=>x[0]).join('').slice(0,2).toUpperCase(); this.players.set(p.id,p); return p;
   }
+  removePlayer(id) { const p=this.players.get(id); if (!p) return false; p.connected=false;p.disconnectedAt=this.elapsed;return true; }
+  reconnectPlayer(id) { const p=this.players.get(id);if(!p||p.surrendered)return false;p.connected=true;p.disconnectedAt=null;p.bot=false;return true; }
+  renamePlayer(p,name){p.name=cleanName(name);p.initials=p.name.slice(0,2).toUpperCase();return true;}
+  adjacent(a,b){ return Boolean(this.regions[Number(a)]?.neighbours.includes(Number(b))); }
+  owned(p){return this.regions.filter(r=>r.ownerId===p.id);}
+  unlocks(p){return ['medicine',...(p.completed.includes('R06')?['radiotherapy']:[]),...(p.completed.includes('R04')?['targeted']:[]),...(p.completed.includes('R08')?['immunotherapy']:[]),...(p.completed.includes('R09')?['vaccine']:[])];}
 
-  removePlayer(id) { return this.players.delete(id); }
-
-  renamePlayer(player, name) { player.name = cleanName(name); return true; }
-
-  adjacent(a, b) {
-    const first = this.regions[a]; const second = this.regions[b];
-    return Boolean(first && second && Math.abs(first.column - second.column) + Math.abs(first.row - second.row) === 1);
+  handle(id,message){ const p=this.players.get(id); if(!p||!message||typeof message!=='object'||this.winner)return this.reject('invalid_command');
+    if(typeof message.commandId!=='string'||!message.commandId.trim())return this.reject('missing_command_id');
+    if(this.commandIds.has(`${id}:${message.commandId}`))return this.reject('duplicate_command');this.commandIds.add(`${id}:${message.commandId}`);
+    if((p.eliminated||p.bot)&&!['join'].includes(message.type))return this.reject('not_human_controlled');
+    const actions={join:()=>this.renamePlayer(p,message.name),start:()=>this.start(p,message.regionId,message.specialty),allocate:()=>this.allocate(p,message.allocation),selectTreatment:()=>this.selectTreatment(p,message.treatment),contest:()=>this.dispatch(p,message.fromId,message.toId,message.commitment,message.filter),dispatch:()=>this.dispatch(p,message.fromId,message.toId,message.commitment,message.filter),withdraw:()=>this.withdraw(p,message.regionId,message.toId),research:()=>this.prioritizeResearch(p,message.project),programme:()=>this.activateProgramme(p,message.regionId),pin:()=>this.setPin(p,message.kind,message.regionId),surrender:()=>{p.surrendered=true;p.bot=true;return true;}};
+    return actions[message.type]?.() ?? false;
   }
-
-  handle(id, message) {
-    const player = this.players.get(id);
-    if (!player || !message || typeof message !== 'object' || this.winner) return false;
-    if (message.type === 'start') return this.start(player, message.regionId);
-    if (message.type === 'join') return this.renamePlayer(player, message.name);
-    if (message.type === 'allocate') return this.allocate(player, message.allocation);
-    if (message.type === 'selectTreatment') return this.selectTreatment(player, message.treatment);
-    if (message.type === 'contest') return this.contest(player, message.fromId, message.toId, message.commitment);
-    return false;
+  reject(reason){this.lastRejection=reason;return false;}
+  start(p,id,specialty){const r=this.regions[Number(id)];if(p.started||!r||r.ownerId!==null)return this.reject('invalid_start');r.ownerId=p.id;r.level=1;r.protection=35;r.inventories.medicine=120;r.acquiredAt=this.elapsed;p.started=true;p.specialty=PROFILES.includes(specialty)?specialty:r.profile;p.focus=p.specialty;return true;}
+  allocate(p,a){if(!a||Object.keys(a).length!==3||!['research','manufacturing','infrastructure'].every(k=>finite(a[k])&&Number(a[k])%5===0&&Number(a[k])>=0))return this.reject('invalid_budget');const values=Object.values(a).map(Number);if(values.reduce((x,y)=>x+y,0)!==100)return this.reject('invalid_budget_total');p.pendingAllocation={research:+a.research,manufacturing:+a.manufacturing,infrastructure:+a.infrastructure};return true;}
+  selectTreatment(p,key){if(!this.unlocks(p).includes(key)||this.elapsed<p.manufacturingAvailableAt)return this.reject('locked_treatment');if(p.selectedTreatment!==key)p.manufacturingAvailableAt=this.elapsed+5;p.selectedTreatment=key;return true;}
+  path(from,to,owner){const queue=[[from]],seen=new Set([from]);while(queue.length){const path=queue.shift(),last=path.at(-1);if(last===to)return path;for(const n of this.regions[last].neighbours)if(!seen.has(n)&&(n===to||this.regions[n].ownerId===owner)){seen.add(n);queue.push([...path,n]);}}return null;}
+  dispatch(p,fromId,toId,commitment=p.commitment,filter='all'){
+    const from=this.regions[Number(fromId)],to=this.regions[Number(toId)],percent=Number(commitment);if(!p.started||p.eliminated||!from||!to||from.ownerId!==p.id)return this.reject('unauthorized_source');if(!finite(percent)||percent<10||percent>100||percent%5)return this.reject('invalid_commitment');if(this.elapsed<from.dispatchAvailableAt)return this.reject('dispatch_cooldown');if(this.convoys.filter(c=>c.companyId===p.id).length>=16)return this.reject('convoy_limit');
+    const path=to.ownerId===p.id?this.path(from.id,to.id,p.id):(this.adjacent(from.id,to.id)?[from.id,to.id]:null);if(!path||path.length<2)return this.reject('no_route');
+    const chosen=filter==='all'?KEYS:[filter];if(!chosen.every(k=>KEYS.includes(k)))return this.reject('invalid_filter');const supply=emptyInventory();for(const k of chosen)supply[k]=from.inventories[k]*percent/100;const capacity=KEYS.reduce((s,k)=>s+supply[k]*TREATMENTS[k].cost,0);if(capacity<10)return this.reject('packet_too_small');if(to.ownerId!==p.id){const foreign=this.foreignTargets(p);const reserved=Math.min(6,3+Math.floor(this.owned(p).length/16));if(!foreign.has(to.id)&&foreign.size>=reserved)return this.reject('foreign_target_limit');if(this.targetCommitment(p.id,to.id)+capacity>1000)return this.reject('target_capacity');}
+    for(const k of KEYS)from.inventories[k]-=supply[k];const slow=Math.max(...chosen.filter(k=>supply[k]>0).map(k=>TREATMENTS[k].edgeTime));const edgeTime=slow*(p.completed.includes('R11')?.8:1);this.convoys.push({id:this.id(),companyId:p.id,sourceId:from.id,targetId:to.id,path,index:0,supply,capacity,edgeTime,dueAt:this.elapsed+edgeTime,createdAt:this.elapsed});from.dispatchAvailableAt=this.elapsed+1;return true;
   }
+  foreignTargets(p){const targets=new Set(this.convoys.filter(c=>c.companyId===p.id&&this.regions[c.targetId]?.ownerId!==p.id).map(c=>c.targetId));for(const r of this.regions)if(r.ownerId!==p.id&&r.campaigns[p.id])targets.add(r.id);return targets;}
+  targetCommitment(companyId,targetId){let total=this.convoys.filter(c=>c.companyId===companyId&&c.targetId===targetId).reduce((s,c)=>s+c.capacity,0);const campaign=this.regions[targetId]?.campaigns[companyId];if(campaign)total+=KEYS.reduce((s,k)=>s+campaign[k]*TREATMENTS[k].cost,0);return total;}
+  contest(p,from,to,commitment){return this.dispatch(p,from,to,commitment,p.selectedTreatment);}
+  withdraw(p,regionId,toId){const r=this.regions[Number(regionId)],to=this.regions[Number(toId)],campaign=r?.campaigns[p.id];if(!campaign||to?.ownerId!==p.id||!this.adjacent(r.id,to.id))return this.reject('invalid_withdrawal');if(this.convoys.filter(c=>c.companyId===p.id).length>=16)return this.reject('convoy_limit');const supply=emptyInventory();for(const k of KEYS)supply[k]=campaign[k]*.8;const edgeTime=(Math.max(...KEYS.filter(k=>supply[k]>0).map(k=>TREATMENTS[k].edgeTime))||3)*(p.completed.includes('R11')?.8:1);const capacity=KEYS.reduce((s,k)=>s+supply[k]*TREATMENTS[k].cost,0);delete r.campaigns[p.id];this.convoys.push({id:this.id(),companyId:p.id,sourceId:r.id,targetId:to.id,path:[r.id,to.id],index:0,supply,capacity,edgeTime,dueAt:this.elapsed+edgeTime,createdAt:this.elapsed});return true;}
+  prioritizeResearch(p,id){if(!RESEARCH[id]||p.completed.includes(id)||this.elapsed<p.priorityAvailableAt)return this.reject('invalid_research_priority');const chain=[];let x=id;while(x&&!p.completed.includes(x)){chain.unshift(x);x=RESEARCH[x][1];}p.researchQueue=[...chain,...p.researchQueue.filter(q=>!chain.includes(q)&&!p.completed.includes(q))];p.priorityAvailableAt=this.elapsed+5;return true;}
+  activateProgramme(p,id){const r=this.regions[Number(id)];if(!p.completed.includes('R09')||r?.ownerId!==p.id||r.programme||r.inventories.vaccine<10)return this.reject('invalid_programme');r.inventories.vaccine-=10;r.programme={pending:true,companyId:p.id,completesAt:this.elapsed+8,expiresAt:null,protection:0};return true;}
+  setPin(p,kind,id){const r=this.regions[Number(id)];if(r?.ownerId!==p.id||!['production','development'].includes(kind))return false;p[`${kind}Pin`]=r.id;return true;}
 
-  start(player, regionId) {
-    const region = this.regions[Number(regionId)];
-    if (player.started || !region || region.ownerId !== null) return false;
-    region.ownerId = player.id; region.strength = 35; region.infrastructure = 1;
-    player.started = true; player.focus = region.profile;
-    return true;
-  }
-
-  allocate(player, allocation) {
-    if (!allocation || typeof allocation !== 'object') return false;
-    const next = ['research', 'manufacturing', 'infrastructure'].map(key => clamp(Math.round(Number(allocation[key]) || 0), 0, 100));
-    if (next.reduce((sum, value) => sum + value, 0) !== 100) return false;
-    [player.allocation.research, player.allocation.manufacturing, player.allocation.infrastructure] = next;
-    return true;
-  }
-
-  selectTreatment(player, treatment) {
-    if (!player.unlocked.includes(treatment)) return false;
-    player.selectedTreatment = treatment;
-    return true;
-  }
-
-  contest(player, fromId, toId, commitment) {
-    const from = this.regions[Number(fromId)]; const target = this.regions[Number(toId)];
-    const treatmentName = player.selectedTreatment; const treatment = TREATMENTS[treatmentName];
-    const percent = clamp(Math.round(Number(commitment) || 0), 5, 100);
-    if (!from || !target || from.ownerId !== player.id || !this.adjacent(from.id, target.id) || !treatment) return false;
-    const available = player.stock[treatmentName];
-    const units = Math.floor(available * percent / 100);
-    if (units < treatment.cost) return false;
-    player.stock[treatmentName] -= units;
-    if (target.ownerId === player.id) {
-      target.strength += units * treatment.control;
-      return true;
-    }
-    const suitability = treatment.match === target.profile || (treatment.match === 'focus' && player.focus === target.profile) ? 1.65 : 1;
-    const incumbentBonus = 1 + target.infrastructure * 0.18;
-    const existing = this.contests.get(target.id);
-    if (existing?.attackerId === player.id) existing.power += units * treatment.speed * suitability;
-    else this.contests.set(target.id, { regionId: target.id, attackerId: player.id, treatment: treatmentName, power: units * treatment.speed * suitability, defense: target.strength * incumbentBonus });
-    return true;
-  }
-
-  tick(seconds = 1) {
-    if (this.winner) return;
-    const delta = clamp(Number(seconds) || 0, 0, 5);
-    this.elapsed += delta;
-    for (const player of this.players.values()) {
-      if (!player.started) continue;
-      const owned = this.regions.filter(region => region.ownerId === player.id);
-      const income = owned.reduce((sum, region) => sum + 1 + region.infrastructure * 0.2, 0) * delta;
-      player.revenue += income;
-      player.research += income * player.allocation.research / 100;
-      for (const [name, treatment] of Object.entries(TREATMENTS)) {
-        if (!player.unlocked.includes(name) && player.research >= treatment.unlock) player.unlocked.push(name);
-      }
-      const build = income * player.allocation.manufacturing / 100;
-      const treatment = TREATMENTS[player.selectedTreatment];
-      player.stock[player.selectedTreatment] += build / treatment.cost;
-      const fortify = income * player.allocation.infrastructure / 100;
-      for (const region of owned) {
-        region.infrastructure = clamp(region.infrastructure + fortify / Math.max(owned.length, 1) / 80, 0, 5);
-        region.strength = clamp(region.strength + fortify / Math.max(owned.length, 1) * 0.25, 1, 100);
-      }
-      const supplyCost = Math.max(0, owned.length - 3) ** 1.35 * 0.025 * delta;
-      player.stock.medicine = Math.max(0, player.stock.medicine - supplyCost);
-    }
-    for (const [regionId, contest] of this.contests) {
-      const region = this.regions[regionId];
-      contest.defense -= contest.power * 0.075 * delta;
-      contest.power = Math.max(0, contest.power - (2 + region.infrastructure) * 0.04 * delta);
-      if (contest.defense <= 0) {
-        region.ownerId = contest.attackerId; region.strength = clamp(contest.power * TREATMENTS[contest.treatment].control, 8, 60); region.infrastructure *= 0.6;
-        this.contests.delete(regionId);
-      } else if (contest.power <= 0) this.contests.delete(regionId);
-    }
-    this.checkVictory(delta);
-  }
-
-  checkVictory(delta) {
-    const counts = [...this.players.values()].map(player => ({ player, count: this.regions.filter(region => region.ownerId === player.id).length })).sort((a, b) => b.count - a.count);
-    const leader = counts[0];
-    if (leader && leader.count / this.regions.length >= 0.6) {
-      if (this.holdLeader === leader.player.id) this.holdSeconds += delta;
-      else { this.holdLeader = leader.player.id; this.holdSeconds = delta; }
-      if (this.holdSeconds >= 60) this.winner = leader.player.id;
-    } else { this.holdLeader = null; this.holdSeconds = 0; }
-    if (!this.winner && this.elapsed >= this.matchSeconds && leader?.count > 0) this.winner = leader.player.id;
-  }
-
-  snapshot() {
-    return {
-      map: MAP, profiles: PROFILES, treatments: TREATMENTS, elapsed: this.elapsed,
-      remaining: Math.max(0, this.matchSeconds - this.elapsed), winner: this.winner,
-      hold: { playerId: this.holdLeader, seconds: this.holdSeconds },
-      players: [...this.players.values()], regions: this.regions, contests: [...this.contests.values()],
-      leaderboard: [...this.players.values()].map(player => ({ id: player.id, name: player.name, color: player.color, regions: this.regions.filter(region => region.ownerId === player.id).length }))
-        .sort((a, b) => b.regions - a.regions || a.name.localeCompare(b.name)).slice(0, 10)
-    };
-  }
+  tick(seconds=STEP){if(this.winner)return;this.accumulator+=clamp(Number(seconds)||0,0,5);while(this.accumulator+1e-9>=STEP&&!this.winner){this.step();this.accumulator-=STEP;}}
+  step(){const start=this.elapsed,end=Math.min(this.matchSeconds,start+STEP),dt=end-start;if(dt<=0){this.checkVictory(0);return;}for(const p of this.players.values()){if(!p.connected&&!p.surrendered&&p.disconnectedAt!=null&&start-p.disconnectedAt>=30)p.bot=true;if(p.pendingAllocation){p.allocation=p.pendingAllocation;p.pendingAllocation=null;}}this.deliver(end);this.expireProgrammes(end);for(const p of this.players.values())if(p.started&&!p.eliminated)this.economy(p,dt,start,end);this.regenerate(dt);this.resolveContests(dt,end);this.elapsed=end;this.applyCompletions();this.clearInvalidPins();this.eliminate();this.runBots();this.checkVictory(dt);}
+  economy(p,dt,start,end){const owned=this.owned(p);p.regionSeconds+=owned.length*dt;let gross=8;let operating=0;for(const r of owned){let mult=1;if(r.acquiredAt!=null&&r.acquiredAt>0){const commissioned=Math.max(0,Math.min(end,r.acquiredAt+10)-start);mult=1-.5*commissioned/dt;}gross+=mult*(3+.4*r.level);operating+=1+.1*r.level;}const d=Math.max(0,owned.length-8),admin=(p.completed.includes('R12')?.85:1)*1.5*owned.length*d/(d+20);p.gross=gross;p.upkeep=operating+admin;p.net=Math.max(0,gross-p.upkeep);p.revenue+=p.net*dt;
+    const alloc=p.allocation,rf=p.net*dt*alloc.research/100,ipf=p.net*dt*alloc.infrastructure/100,mf=p.net*dt*alloc.manufacturing/100;let manufacturing=mf;const beforeResearch=p.research;manufacturing+=this.fundResearch(p,rf,dt);p.researchSpend=(p.research-beforeResearch)/dt;const beforeInfrastructure=this.totalUpgradeProgress(p);manufacturing+=this.fundInfrastructure(p,ipf,dt);p.infrastructureSpend=(this.totalUpgradeProgress(p)-beforeInfrastructure)/dt;this.manufacture(p,manufacturing,dt,owned);}
+  totalUpgradeProgress(p){return this.owned(p).reduce((sum,r)=>sum+r.upgradeProgress,0);}
+  activeResearch(p){return p.researchQueue.find(id=>!p.completed.includes(id)&&(!RESEARCH[id][1]||p.completed.includes(RESEARCH[id][1])));}
+  fundResearch(p,funding,dt){const id=this.activeResearch(p);if(!id){const total=p.researchBank+funding;p.researchBank=Math.min(300,total);return Math.max(0,total-300);}const [, ,cost,minTime]=RESEARCH[id],progress=p.researchProgress[id]||0,available=p.researchBank+funding,spend=Math.min(available,cost-progress,cost/minTime*dt);p.researchProgress[id]=progress+spend;p.research+=spend;p.researchBank=Math.min(300,available-spend);return Math.max(0,available-spend-300);}
+  fundInfrastructure(p,funding,dt){const owned=this.owned(p),canMake=r=>r.level>=TREATMENTS[p.selectedTreatment].level,r=owned.find(x=>x.id===p.developmentPin&&x.level<3)||owned.filter(x=>x.level<3&&canMake(x)).sort((a,b)=>a.level-b.level||(a.acquiredAt??Infinity)-(b.acquiredAt??Infinity)||a.id-b.id)[0]||owned.filter(x=>x.level<3).sort((a,b)=>a.level-b.level||(a.acquiredAt??Infinity)-(b.acquiredAt??Infinity)||a.id-b.id)[0];if(!r){const total=p.infrastructureBank+funding;p.infrastructureBank=Math.min(300,total);return Math.max(0,total-300);}const costs=[0,60,140,260],times=[0,20,35,50],cost=costs[r.level+1],available=p.infrastructureBank+funding,spend=Math.min(available,cost-r.upgradeProgress,cost/times[r.level+1]*dt);r.upgradeProgress+=spend;p.infrastructureBank=Math.min(300,available-spend);return Math.max(0,available-spend-300);}
+  manufacture(p,funding,dt,owned){const key=p.selectedTreatment,t=TREATMENTS[key],eligible=owned.filter(r=>r.level>=t.level&&this.storageUsed(r)<this.storageCap(r));let remaining=funding,accepted=0;if(eligible.length){const weighted=eligible.map(r=>({r,w:(r.productionPin||p.productionPin===r.id?3:1)*(r.neighbours.some(n=>this.regions[n].ownerId!==p.id)?3:1)}));for(let pass=0;pass<weighted.length&&remaining>1e-9;pass++){const active=weighted.filter(x=>(4+4*x.r.level)*dt-(x.used||0)>1e-9&&this.storageCap(x.r)-this.storageUsed(x.r)>1e-9);if(!active.length)break;const total=active.reduce((s,x)=>s+x.w,0);let spent=0;for(const x of active){const share=remaining*x.w/total,room=(this.storageCap(x.r)-this.storageUsed(x.r))/(p.completed.includes('R01')?1.1:1),cap=(4+4*x.r.level)*dt-(x.used||0),take=Math.min(share,cap,room);x.used=(x.used||0)+take;x.r.inventories[key]+=take*(p.completed.includes('R01')?1.1:1)/t.cost;spent+=take;}remaining-=spent;accepted+=spent;if(spent<1e-9)break;}}
+    p.production=accepted*(p.completed.includes('R01')?1.1:1)/dt;p.manufacturingSpend=accepted/dt;p.unusedManufacturing=remaining/dt;p.overflow=Math.max(0,remaining);}
+  storageCap(r){return 200+100*r.level;} storageUsed(r){return KEYS.reduce((s,k)=>s+r.inventories[k]*TREATMENTS[k].cost,0);}
+  deliver(time){const arrivals=[];for(const c of this.convoys)while(c.dueAt<=time+1e-9){const next=c.path[c.index+1];if(next==null){arrivals.push(c);break;}const r=this.regions[next];c.index++;if(next===c.targetId||r.ownerId!==c.companyId){arrivals.push(c);break;}c.dueAt+=c.edgeTime;}const groups=new Map();for(const c of arrivals){this.convoys.splice(this.convoys.indexOf(c),1);const regionId=c.path[c.index],key=`${regionId}:${c.companyId}`;if(!groups.has(key))groups.set(key,{region:this.regions[regionId],companyId:c.companyId,supply:emptyInventory()});for(const k of KEYS)groups.get(key).supply[k]+=c.supply[k];}for(const {region:r,companyId,supply} of groups.values()){if(r.ownerId===companyId)this.unload(r,supply);else{r.campaigns[companyId]??=emptyInventory();for(const k of KEYS)r.campaigns[companyId][k]+=supply[k];r.quietTime=0;}}this.syncContests();}
+  unload(r,supply){const free=Math.max(0,this.storageCap(r)-this.storageUsed(r)),incoming=KEYS.reduce((s,k)=>s+supply[k]*TREATMENTS[k].cost,0),scale=incoming?Math.min(1,free/incoming):0;for(const k of KEYS)r.inventories[k]+=supply[k]*scale;}
+  expireProgrammes(time){for(const r of this.regions)if(r.programme){if(r.ownerId!==r.programme.companyId){r.programme=null;continue;}if(r.programme.pending&&r.programme.completesAt<=time){const p=this.players.get(r.ownerId),advanced=p?.completed.includes('R10');r.programme.pending=false;r.programme.protection=advanced?75:60;r.programme.expiresAt=r.programme.completesAt+(advanced?120:90);}if(!r.programme.pending&&r.programme.expiresAt<=time)r.programme=null;}}
+  regenerate(dt){for(const r of this.regions){if(Object.keys(r.campaigns).some(id=>this.campaignForce(r,id)>0)){r.quietTime=0;continue;}r.quietTime+=dt;if(r.quietTime>5)r.protection=Math.min(r.ownerId?20+15*r.level:30,r.protection+(r.ownerId?2+r.level:2)*dt);}}
+  campaignForce(r,id){const p=this.players.get(id);return p?KEYS.reduce((s,k)=>s+r.campaigns[id][k]*treatmentForce(p,k,r.profile),0):0;}
+  defenderForce(r){const p=this.players.get(r.ownerId);return r.protection+(r.programme?.protection||0)+(p?KEYS.reduce((s,k)=>s+r.inventories[k]*treatmentForce(p,k,r.profile,true),0):0);}
+  resolveContests(dt,time){const changes=[];for(const r of this.regions){let parties=[];const df=this.defenderForce(r);if(df>0)parties.push({id:r.ownerId??'neutral',defender:true,force:df});for(const id of Object.keys(r.campaigns)){const f=this.campaignForce(r,id);if(f>0)parties.push({id,defender:false,force:f});}if(parties.length<2){if(parties.length===1&&!parties[0].defender)changes.push({r,winner:parties[0].id});continue;}const losses=new Map();for(const target of parties){let loss=0;for(const source of parties)if(source!==target){const others=parties.reduce((s,x)=>s+(x!==source?x.force:0),0);loss+=(.1*source.force+Math.min(4,source.force))*target.force/others;}losses.set(target,Math.min(target.force,loss*dt));}for(const party of parties){const remain=party.force-losses.get(party);if(party.defender)this.consumeDefense(r,losses.get(party));else this.consumeCampaign(r,party.id,losses.get(party));party.remain=remain<1?0:remain;}const defender=parties.find(x=>x.defender),attackers=parties.filter(x=>!x.defender&&x.remain>0);if(defender?.remain>0)continue;if(attackers.length===1)changes.push({r,winner:attackers[0].id});else if(attackers.length>1)changes.push({r,winner:null,disputed:true});}
+    for(const change of changes)this.capture(change.r,change.winner,time,change.disputed);this.syncContests();}
+  consumeDefense(r,loss){let left=loss;if(r.programme){const x=Math.min(left,r.programme.protection);r.programme.protection-=x;left-=x;}const base=Math.min(left,r.protection);r.protection-=base;left-=base;if(left>0){const p=this.players.get(r.ownerId),force=KEYS.reduce((s,k)=>s+r.inventories[k]*(p?treatmentForce(p,k,r.profile,true):1),0),ratio=force?Math.min(1,left/force):0;for(const k of KEYS)r.inventories[k]*=1-ratio;}}
+  consumeCampaign(r,id,loss){const force=this.campaignForce(r,id);if(!force)return;const ratio=Math.min(1,loss/force);for(const k of KEYS)r.campaigns[id][k]*=1-ratio;if(this.campaignForce(r,id)<1)delete r.campaigns[id];}
+  capture(r,winner,time,disputed=false){const old=r.ownerId;if(winner===old)return;const supply=winner?r.campaigns[winner]:null;r.ownerId=winner;r.level=Math.max(0,r.level-1);r.upgradeProgress=0;r.inventories=emptyInventory();if(supply)r.inventories={...supply};r.campaigns={};r.protection=0;r.programme=null;r.acquiredAt=winner?time:null;r.dispatchAvailableAt=time+5;r.quietTime=0;r.disputed=disputed;}
+  syncContests(){this.contests.clear();for(const r of this.regions)for(const id of Object.keys(r.campaigns))this.contests.set(`${r.id}:${id}`,{regionId:r.id,attackerId:id,power:this.campaignForce(r,id),defense:this.defenderForce(r)});}
+  applyCompletions(){for(const p of this.players.values()){for(const id of Object.keys(p.researchProgress))if(!p.completed.includes(id)&&p.researchProgress[id]>=RESEARCH[id][2]-1e-8){p.completed.push(id);if(id==='R04'&&!p.targetedIndications.includes(p.specialty))p.targetedIndications.push(p.specialty);if(id==='R05'){const counts=Object.fromEntries(PROFILES.map(profile=>[profile,0]));for(const r of this.regions)if(r.ownerId!==p.id&&r.neighbours.some(n=>this.regions[n].ownerId===p.id))counts[r.profile]++;const extra=PROFILES.filter(x=>x!==p.specialty).sort((a,b)=>counts[b]-counts[a]||PROFILES.indexOf(a)-PROFILES.indexOf(b))[0];if(!p.targetedIndications.includes(extra))p.targetedIndications.push(extra);}p.unlocked=this.unlocks(p);}}for(const r of this.regions){const costs=[0,60,140,260];if(r.level<3&&r.upgradeProgress>=costs[r.level+1]-1e-8){r.level++;r.upgradeProgress=0;}}}
+  clearInvalidPins(){for(const p of this.players.values())for(const kind of ['production','development'])if(this.regions[p[`${kind}Pin`]]?.ownerId!==p.id)p[`${kind}Pin`]=null;}
+  eliminate(){for(const p of this.players.values())if(p.started&&!p.eliminated&&!this.regions.some(r=>r.ownerId===p.id)){p.eliminated=true;this.convoys=this.convoys.filter(c=>c.companyId!==p.id);for(const r of this.regions)delete r.campaigns[p.id];}}
+  runBots(){for(const p of this.players.values()){if(!p.bot||p.eliminated||!p.started||this.elapsed+1e-9<p.nextBotAt)continue;p.nextBotAt=this.elapsed+2;p.allocation={research:20,manufacturing:65,infrastructure:15};const borders=this.owned(p).filter(r=>r.neighbours.some(n=>this.regions[n].ownerId!==p.id)).sort((a,b)=>a.id-b.id);for(const from of borders){const target=from.neighbours.map(id=>this.regions[id]).filter(r=>r.ownerId!==p.id).sort((a,b)=>a.id-b.id)[0];if(!target)continue;const own=this.defenderForce(from),enemy=this.defenderForce(target);const commitment=own*.5>=30?50:own*.35>=30?65:null;if(commitment&&own*commitment/100>=enemy*(target.ownerId?1.6:1.35)&&this.dispatch(p,from.id,target.id,commitment,'all'))break;}}}
+  checkVictory(dt){const alive=[...this.players.values()].filter(p=>p.started&&!p.eliminated),counts=alive.map(p=>({player:p,count:this.owned(p).length})).sort((a,b)=>b.count-a.count||b.player.regionSeconds-a.player.regionSeconds||a.player.id.localeCompare(b.player.id));if(alive.length===1&&[...this.players.values()].filter(p=>p.started).length>1){this.finish([alive[0]],'last-standing');return;}const leader=counts[0],threshold=Math.ceil(.6*this.regions.length);if(leader?.count>=threshold){if(this.holdLeader===leader.player.id)this.holdSeconds+=dt;else{this.holdLeader=leader.player.id;this.holdSeconds=0;}if(this.holdSeconds>=60){this.finish([leader.player],'dominance');return;}}else{this.holdLeader=null;this.holdSeconds=0;}if(this.elapsed>=this.matchSeconds&&leader?.count>0){const winners=counts.filter(x=>x.count===leader.count&&Math.abs(x.player.regionSeconds-leader.player.regionSeconds)<1e-9).map(x=>x.player);this.finish(winners,'timed');}}
+  finish(players,type){const winners=Array.isArray(players)?players:[players];this.winner=winners[0].id;this.result={type,winners:winners.map(p=>p.id),at:this.elapsed};}
+  snapshot(){return {version:BALANCE_VERSION,map:this.map,profiles:PROFILES,treatments:TREATMENTS,research:RESEARCH,elapsed:this.elapsed,remaining:Math.max(0,this.matchSeconds-this.elapsed),winner:this.winner,result:this.result,hold:{playerId:this.holdLeader,seconds:this.holdSeconds},players:[...this.players.values()],regions:this.regions,convoys:this.convoys,contests:[...this.contests.values()],leaderboard:[...this.players.values()].map(p=>({id:p.id,name:p.name,color:p.color,regions:this.owned(p).length,regionSeconds:p.regionSeconds})).sort((a,b)=>b.regions-a.regions||b.regionSeconds-a.regionSeconds||a.name.localeCompare(b.name)).slice(0,10)};}
 }
