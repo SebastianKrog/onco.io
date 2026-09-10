@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>onco.io — Control the network</title><link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div id="join" class="modal"><form id="join-form" class="card">
+    <div class="logo">onco<span>.io</span></div><p>Lead an oncology company. Build a treatment portfolio. Control the hospital network.</p>
+    <input id="name" maxlength="18" placeholder="Company name" aria-label="Company name" required><button>Join match</button>
+  </form></div>
+  <header><div class="logo small">onco<span>.io</span></div><div class="tag">HOSPITAL NETWORK CONTROL</div><div id="clock">12:00</div><div id="connection">Connecting…</div></header>
+  <main>
+    <aside class="panel controls">
+      <h2>Budget allocation</h2><div id="allocations"></div>
+      <h2>Treatment</h2><div id="treatments"></div>
+      <h2>Commit stockpile</h2><label class="commit"><input id="commitment" type="range" min="5" max="100" value="40"><output id="commit-output">40%</output></label>
+      <div id="company"></div>
+    </aside>
+    <section class="map-wrap"><canvas id="map" width="1120" height="700"></canvas><div id="instruction">Click an unclaimed region to establish your foothold.</div><div class="profile-key"><i class="solid"></i> Solid <i class="blood"></i> Blood <i class="rare"></i> Rare <i class="mixed"></i> Mixed</div></section>
+    <aside class="panel"><h2>Network leaders</h2><ol id="leaders"></ol><h2>Region intelligence</h2><div id="intel">Select a region.</div><div id="victory">Hold 60% for 1 minute or lead when time expires.</div></aside>
+  </main>
+  <script type="module" src="/client.js"></script>
+</body></html>
