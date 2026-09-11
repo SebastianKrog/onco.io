@@ -35,7 +35,8 @@ test('connects players, accepts messages, broadcasts state, and enables automati
   const welcome = JSON.parse(welcomeEvent.data);
   assert.equal(welcome.type, 'welcome'); assert.equal(welcome.id, 'identity-1'); assert.ok(welcome.credential); assert.equal(welcome.spectator, false);
   socket.send(JSON.stringify({ type: 'join', name: '  Lab Team  ', commandId: 'join' }));
-  socket.send(JSON.stringify({ type: 'start', regionId: 0, commandId: 'start' }));
+  const pad = app.game.pads[0];
+  socket.send(JSON.stringify({ type: 'start', regionId: pad, commandId: 'start' }));
   await new Promise(resolve=>setTimeout(resolve,10));
   app.game.tick(0.25);
   socket.send(JSON.stringify({ type: 'allocate', allocation: { research: 40, manufacturing: 40, infrastructure: 20 }, commandId: 'budget' }));
@@ -44,7 +45,7 @@ test('connects players, accepts messages, broadcasts state, and enables automati
   const stateEvent = await statePromise;
   const state = JSON.parse(stateEvent.data);
   assert.equal(state.type, 'state'); assert.equal(state.players[0].name, 'Lab Team');
-  assert.equal(state.regions[0].ownerId, 'identity-1');
+  assert.equal(state.regions[pad].ownerId, 'identity-1');
   assert.deepEqual(state.players[0].allocation, { research: 40, manufacturing: 40, infrastructure: 20 });
   socket.close(); await event('close');
   for (let attempt = 0; app.game.players.get('identity-1').connected && attempt < 20; attempt += 1) await new Promise(resolve => setTimeout(resolve, 5));
