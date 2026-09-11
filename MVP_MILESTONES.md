@@ -141,29 +141,29 @@ acceptance criteria.
 
 ## Milestone 5 — Continuity programmes and bot policy
 
-- [ ] **Expose continuity programmes.** Add activation controls and show the ten
+- [x] **Expose continuity programmes.** Add activation controls and show the ten
   VAC cost, eight-second pending state, 60/75 protection, 90/120-second expiry,
   depletion, unavailability until scheduled expiry, and cancellation on loss.
-- [ ] **Implement bot threat continuity.** As the highest-priority tactical
+- [x] **Implement bot threat continuity.** As the highest-priority tactical
   action, activate or supply a continuity programme on a threatened border while
   obeying identical stock, route, cooldown, and information rules.
-- [ ] **Implement bot reinforcement.** Evaluate reinforcements that arrive within
+- [x] **Implement bot reinforcement.** Evaluate reinforcements that arrive within
   12 seconds and retain at least 30% at the source, then rank candidates
   deterministically.
-- [ ] **Implement bot attacks.** Evaluate 50% and 65% packets while retaining the
+- [x] **Implement bot attacks.** Evaluate 50% and 65% packets while retaining the
   required reserve, enforce 1.35 neutral and 1.60 rival force ratios, require
   pressure above defender production, and take at most one tactical action per
   seeded two-second evaluation.
-- [ ] **Implement bot strategic management.** Keep Balanced budgets, assign one of
+- [x] **Implement bot strategic management.** Keep Balanced budgets, assign one of
   three slot-based research priorities, choose production by force per processed
   credit, and build a level-2 factory before selecting advanced products.
-- [ ] **Implement the exact programme objective.** Allow a bot to manufacture and
+- [x] **Implement the exact programme objective.** Allow a bot to manufacture and
   route exactly ten VAC to its selected programme site, and abandon or re-plan the
   objective if its route breaks so production cannot become stuck.
 
 ### Milestone acceptance
 
-- [ ] Deterministic scenario tests separately verify tactical priority, arrival
+- [x] Deterministic scenario tests separately verify tactical priority, arrival
   limits, retained reserves for both packet sizes, attack thresholds, one-action
   limits, research slots, advanced-product preparation, exact VAC delivery, and
   broken-route recovery.
