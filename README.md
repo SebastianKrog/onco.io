@@ -27,3 +27,16 @@ npm run test:coverage
 ```
 
 The project uses Node.js built-ins on the server and dependency-free HTML, CSS, and JavaScript in the browser.
+
+## Balance, telemetry, and replay
+
+The immutable ruleset in `server/balance.js` is identified by the balance
+version included in every state message. Matches collect aggregate and event
+telemetry in `snapshot().telemetry`; events identify human decisions and each
+deterministic bot policy without including reconnect credentials.
+
+Call `game.exportReplay()` to retain a match seed, version, roster, accepted
+commands, result, and compact SHA-256 fixed-step boundary records. Passing that
+record to `replayMatch(record)` re-simulates the match and reports the first
+divergent boundary. Replay records should be retained alongside playtest data so
+balance results remain reproducible after a new ruleset version is introduced.
