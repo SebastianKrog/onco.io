@@ -170,31 +170,31 @@ acceptance criteria.
 
 ## Milestone 6 — Complete player interface and operational feedback
 
-- [ ] **Complete persistent company metrics.** Always show clock, own region
+- [x] **Complete persistent company metrics.** Always show clock, own region
   count, leaders, gross/net/upkeep, effective spending, overflow, unused funding,
   actual product output, commitment, filter, research ETA, and dominance progress.
-- [ ] **Complete selected-region intelligence.** Show owner, profile icon, level,
+- [x] **Complete selected-region intelligence.** Show owner, profile icon, level,
   upgrade progress, acquisition/commissioning/dispatch times, storage usage and
   over-capacity state, protection components, programme state, five inventories,
   production eligibility, and both focus pins.
-- [ ] **Add all gameplay controls.** Provide specialty selection during placement,
+- [x] **Add all gameplay controls.** Provide specialty selection during placement,
   production and development pins, programme activation, withdrawal, research
   prioritization/choice, surrender, and spectator/reconnect states.
-- [ ] **Improve map state communication.** Supplement ownership colors with
+- [x] **Improve map state communication.** Supplement ownership colors with
   initials and patterns, use profile icons, draw convoy routes/destinations, and
   show contest borders with segmented bars for every party.
-- [ ] **Implement deduplicated alerts.** Cover new contests, losses, unlocks,
+- [x] **Implement deduplicated alerts.** Cover new contests, losses, unlocks,
   command rejection, route interruption, production blockage, unused funding,
   over-capacity state, programme transitions, and dominance without repeating an
   unchanged alert each step.
-- [ ] **Audit language and accessibility.** Use calm operational language and
+- [x] **Audit language and accessibility.** Use calm operational language and
   stock-comparison terminology, avoid weapon or patient-harm imagery, support
   keyboard interaction and non-color cues, and keep the map central at supported
   viewport sizes.
 
 ### Milestone acceptance
 
-- [ ] Browser-level tests exercise a complete human flow from lobby placement
+- [x] Browser-level tests exercise a complete human flow from lobby placement
   through budgets, research, production, pins, dispatch, reinforcement, contest,
   withdrawal, programme activation, surrender, reconnect, spectating, and match
   result, including keyboard-only and non-color identification checks.
