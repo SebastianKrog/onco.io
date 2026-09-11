@@ -6,7 +6,8 @@ import { RELEASE_GATE, evaluateReleaseGate } from '../server/release.js';
 
 test('release gate requires seven check classes for every supported lobby size', () => {
   assert.deepEqual(RELEASE_GATE.lobbySizes,[20,30,40]);assert.equal(RELEASE_GATE.acceptanceScenarios.length,22);assert.equal(Object.isFrozen(RELEASE_GATE),true);
-  const evidence={checks:{},acceptanceScenarios:{},playtestMatches:{20:1,30:1,40:1},deviationsDocumented:true};
+  const lobbyResults=Object.fromEntries(RELEASE_GATE.lobbySizes.map(size=>[size,{pass:true,matches:3}]));
+  const evidence={checks:{},acceptanceScenarios:{},verifiedCampaign:{verified:true,balanceVersion:RELEASE_GATE.balanceVersion,lobbyResults},deviationsDocumented:true};
   for(const check of RELEASE_GATE.checks)evidence.checks[check]=Object.fromEntries(RELEASE_GATE.lobbySizes.map(size=>[size,true]));
   for(const scenario of RELEASE_GATE.acceptanceScenarios)evidence.acceptanceScenarios[scenario]=true;
   assert.equal(evaluateReleaseGate(evidence).ready,true);

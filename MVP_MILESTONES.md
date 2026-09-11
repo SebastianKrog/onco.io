@@ -214,7 +214,7 @@ acceptance criteria.
 - [x] **Automate every MVP acceptance scenario.** Add explicit tests for all 22
   scenarios in section 14 of the gameplay specification rather than relying on
   broad unit coverage or direct state mutation.
-- [ ] **Run multiplayer playtests against balance targets.** Measure opening,
+- [x] **Run multiplayer playtests against balance targets.** Measure opening,
   neutral capture, first research and contest timing, ordinary contest duration,
   advanced-product availability, completed research, specialist production,
   programme counterplay, and victory distribution; tune only through the
