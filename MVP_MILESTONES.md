@@ -39,25 +39,25 @@ acceptance criteria.
 
 ## Milestone 2 — Seeded maps and placement pads
 
-- [ ] **Create the official templates.** Ship contiguous odd-row hex templates of
+- [x] **Create the official templates.** Ship contiguous odd-row hex templates of
   16×10, 20×12, and 20×16 regions with stable IDs and up to six neighbors.
-- [ ] **Generate seeded profile patches.** Allocate Solid, Blood, Rare, and Mixed
+- [x] **Generate seeded profile patches.** Allocate Solid, Blood, Rare, and Mixed
   exactly evenly while arranging deterministic patches of roughly two to five
   regions and preserving the seed in match metadata.
-- [ ] **Generate and validate candidate pads.** Apply the axial-coordinate class
+- [x] **Generate and validate candidate pads.** Apply the axial-coordinate class
   rule and seeded farthest-point selection, then verify that every pad has at
   least four neighbors, is at least three graph edges from every other pad, and
   has every profile within two edges.
-- [ ] **Restrict placement to pads.** Expose available/reserved pads in snapshots,
+- [x] **Restrict placement to pads.** Expose available/reserved pads in snapshots,
   reject arbitrary or already-reserved starts, and default specialty to the
   selected pad's profile when no specialty is submitted.
-- [ ] **Render actual hexes.** Replace rectangular hit areas and tiles with the
+- [x] **Render actual hexes.** Replace rectangular hit areas and tiles with the
   odd-row hex geometry used by the server while keeping selection and scaling
   accurate on all three map sizes.
 
 ### Milestone acceptance
 
-- [ ] Seed-repeatability and invariant tests validate region counts, equal profile
+- [x] Seed-repeatability and invariant tests validate region counts, equal profile
   allocation, connectivity, neighbor symmetry, patch sizing targets, pad spacing,
   pad degree, nearby-profile access, and client hit testing.
 

@@ -10,7 +10,7 @@ test('constructs the versioned hex map and complete company defaults', () => {
   const player = game.addPlayer('<A very long company name!>');
   assert.equal(BALANCE_VERSION, '0.2');
   assert.equal(game.regions.length, MAP.columns * MAP.rows);
-  assert.deepEqual(game.regions.slice(0, 4).map(region => region.profile), PROFILES);
+  assert.deepEqual(new Set(game.regions.map(region => region.profile)), new Set(PROFILES));
   assert.equal(game.regions[0].neighbours.length, 2);
   assert.equal(game.adjacent(0, 1), true);
   assert.equal(game.adjacent(0, 16), true);
@@ -208,6 +208,20 @@ test('orders same-boundary commands, rejects invalid phases, and freezes a resul
   assert.equal(JSON.stringify(game.snapshot()),frozen);
   assert.equal(game.handle(player.id,{type:'join',name:'Changed',commandId:'late'}),false);
   assert.equal(game.lastRejection,'match_finished');
+});
+
+test('placement exposes pad reservations and defaults or accepts specialty', () => {
+  const game=makeGame({placementSeconds:1,seed:'placement'}),first=game.connect('First').player,second=game.connect('Second').player;
+  const arbitrary=game.regions.find(region=>!game.pads.includes(region.id)).id,pad=game.pads[0];
+  game.handle(first.id,{type:'start',regionId:arbitrary,commandId:'arbitrary'});game.tick(.25);
+  assert.equal(first.started,false);assert.equal(game.commandLog.at(-1).reason,'invalid_start');
+  game.handle(first.id,{type:'start',regionId:pad,commandId:'first'});game.tick(.25);
+  assert.equal(first.specialty,game.regions[pad].profile);
+  let snapshot=game.snapshot();assert.ok(snapshot.reservedPads.includes(pad));assert.ok(!snapshot.availablePads.includes(pad));
+  game.handle(second.id,{type:'start',regionId:pad,specialty:'rare',commandId:'reserved'});game.tick(.25);
+  assert.equal(second.started,false);assert.equal(game.commandLog.at(-1).reason,'invalid_start');
+  game.handle(second.id,{type:'start',regionId:game.pads[1],specialty:'rare',commandId:'specialty'});game.tick(.25);
+  assert.equal(second.specialty,'rare');snapshot=game.snapshot();assert.equal(snapshot.seed,'placement');assert.equal(snapshot.map.seed,'placement');
 });
 
 test('spectates late connections and restores reconnect identity unless surrendered', () => {

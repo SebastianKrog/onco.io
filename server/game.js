@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
+import { createSeededMap, MAP_TEMPLATES, regionNeighbours } from './map.js';
 
 export const STEP = 0.25;
 export const MAP = { columns: 16, rows: 10 };
-export const LOBBY_SIZES = Object.freeze({ 20: { columns: 16, rows: 10 }, 30: { columns: 20, rows: 12 }, 40: { columns: 20, rows: 16 } });
+export const LOBBY_SIZES = MAP_TEMPLATES;
 export const PHASES = Object.freeze({ WAITING: 'waiting', PLACEMENT: 'placement', ACTIVE: 'active', FINISHED: 'finished' });
 export const PROFILES = ['solid', 'blood', 'rare', 'mixed'];
 export const BALANCE_VERSION = '0.2';
@@ -28,12 +29,6 @@ const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 const cleanName = name => String(name ?? '').replace(/[^\p{L}\p{N} ._-]/gu, '').trim().slice(0, 18) || 'Researcher';
 const finite = value => Number.isFinite(Number(value));
 
-function neighbours(id, columns = MAP.columns, rows = MAP.rows) {
-  const row = Math.floor(id / columns), col = id % columns;
-  const deltas = row % 2 ? [[-1,0],[1,0],[0,-1],[1,-1],[0,1],[1,1]] : [[-1,0],[1,0],[-1,-1],[0,-1],[-1,1],[0,1]];
-  return deltas.map(([dc,dr]) => [col + dc, row + dr]).filter(([c,r]) => c >= 0 && c < columns && r >= 0 && r < rows).map(([c,r]) => r * columns + c).sort((a,b)=>a-b);
-}
-
 export function treatmentForce(player, key, profile, defending = false) {
   const base = TREATMENTS[key].cost;
   let multiplier = key === 'radiotherapy' ? ({ solid:1.35,blood:.55,rare:.85,mixed:1 }[profile]) : key === 'immunotherapy' ? (profile === 'mixed' ? 1.35 : 1.25) : key === 'vaccine' ? .7 : 1;
@@ -45,14 +40,15 @@ export function treatmentForce(player, key, profile, defending = false) {
 }
 
 export class Game {
-  constructor({ random = Math.random, id = randomUUID, matchSeconds = 720, lobbySize = 20, placementSeconds = 20, columns, rows, now = () => Date.now() } = {}) {
+  constructor({ random = Math.random, id = randomUUID, matchSeconds = 720, lobbySize = 20, placementSeconds = 20, columns, rows, seed = randomUUID(), now = () => Date.now() } = {}) {
     if (!LOBBY_SIZES[lobbySize] && (columns == null || rows == null)) throw new RangeError('lobbySize must be 20, 30, or 40');
     const template = columns != null && rows != null ? { columns, rows } : LOBBY_SIZES[lobbySize];
     this.random=random; this.id=id; this.now=now; this.matchSeconds=matchSeconds; this.lobbySize=lobbySize; this.placementSeconds=placementSeconds; this.elapsed=0; this.lobbyElapsed=0; this.accumulator=0; this.players=new Map();
     this.phase=PHASES.WAITING; this.placementRemaining=placementSeconds; this.startedAt=null; this.finishedAt=null;
     this.convoys=[]; this.commands=[]; this.commandLog=[]; this.commandIds=new Set(); this.sequence=0; this.winner=null; this.result=null; this.holdLeader=null; this.holdSeconds=0;
-    this.map={ ...template }; this.regions=Array.from({length:template.columns*template.rows},(_,id)=>({ id, name:`Region ${id+1}`, column:id%template.columns,row:Math.floor(id/template.columns), neighbours:neighbours(id,template.columns,template.rows), profile:PROFILES[id%4], ownerId:null, level:0, upgradeProgress:0, inventories:emptyInventory(), protection:30, quietTime:0, acquiredAt:null, commissionedUntil:0, dispatchAvailableAt:0, programme:null, developmentPin:false, productionPin:false, campaigns:{} }));
-    this.pads=Array.from({length:lobbySize},(_,index)=>Math.floor(index*this.regions.length/lobbySize));
+    const generated = columns == null && rows == null ? createSeededMap({ lobbySize, seed }) : null;
+    this.seed=String(seed); this.map={ ...template, seed:this.seed }; this.regions=Array.from({length:template.columns*template.rows},(_,id)=>({ id, name:`Region ${id+1}`, column:id%template.columns,row:Math.floor(id/template.columns), neighbours:generated?.regions[id].neighbours??regionNeighbours(id,template.columns,template.rows), profile:generated?.regions[id].profile??PROFILES[id%4], profilePatch:generated?.regions[id].profilePatch??null, ownerId:null, level:0, upgradeProgress:0, inventories:emptyInventory(), protection:30, quietTime:0, acquiredAt:null, commissionedUntil:0, dispatchAvailableAt:0, programme:null, developmentPin:false, productionPin:false, campaigns:{} }));
+    this.pads=generated?.pads??Array.from({length:lobbySize},(_,index)=>Math.floor(index*this.regions.length/lobbySize));
     this.contests=new Map();
   }
 
@@ -143,5 +139,5 @@ export class Game {
   runBots(){for(const p of this.players.values()){if(!p.bot||p.eliminated||!p.started||this.elapsed+1e-9<p.nextBotAt)continue;p.nextBotAt=this.elapsed+2;p.allocation={research:20,manufacturing:65,infrastructure:15};const borders=this.owned(p).filter(r=>r.neighbours.some(n=>this.regions[n].ownerId!==p.id)).sort((a,b)=>a.id-b.id);for(const from of borders){const target=from.neighbours.map(id=>this.regions[id]).filter(r=>r.ownerId!==p.id).sort((a,b)=>a.id-b.id)[0];if(!target)continue;const own=this.defenderForce(from),enemy=this.defenderForce(target);const commitment=own*.5>=30?50:own*.35>=30?65:null;if(commitment&&own*commitment/100>=enemy*(target.ownerId?1.6:1.35)&&this.dispatch(p,from.id,target.id,commitment,'all'))break;}}}
   checkVictory(dt){const alive=[...this.players.values()].filter(p=>p.started&&!p.eliminated),counts=alive.map(p=>({player:p,count:this.owned(p).length})).sort((a,b)=>b.count-a.count||b.player.regionSeconds-a.player.regionSeconds||a.player.id.localeCompare(b.player.id));if(alive.length===1&&[...this.players.values()].filter(p=>p.started).length>1){this.finish([alive[0]],'last-standing');return;}const leader=counts[0],threshold=Math.ceil(.6*this.regions.length);if(leader?.count>=threshold){if(this.holdLeader===leader.player.id)this.holdSeconds+=dt;else{this.holdLeader=leader.player.id;this.holdSeconds=0;}if(this.holdSeconds>=60){this.finish([leader.player],'dominance');return;}}else{this.holdLeader=null;this.holdSeconds=0;}if(this.elapsed>=this.matchSeconds&&leader?.count>0){const winners=counts.filter(x=>x.count===leader.count&&Math.abs(x.player.regionSeconds-leader.player.regionSeconds)<1e-9).map(x=>x.player);this.finish(winners,'timed');}}
   finish(players,type){const winners=Array.isArray(players)?players:[players];this.winner=winners[0].id;this.result={type,winners:winners.map(p=>p.id),at:this.elapsed};this.phase=PHASES.FINISHED;this.finishedAt=this.now();}
-  snapshot(){return {version:BALANCE_VERSION,phase:this.phase,lobbySize:this.lobbySize,placementRemaining:this.placementRemaining,pads:this.pads,map:this.map,profiles:PROFILES,treatments:TREATMENTS,research:RESEARCH,elapsed:this.elapsed,remaining:Math.max(0,this.matchSeconds-this.elapsed),winner:this.winner,result:this.result,hold:{playerId:this.holdLeader,seconds:this.holdSeconds},commandOutcomes:this.commandLog.slice(-100).map(({message,...entry})=>({...entry,type:entry.type??message?.type})),players:[...this.players.values()].map(({credential,...p})=>p),regions:this.regions,convoys:this.convoys,contests:[...this.contests.values()],leaderboard:[...this.players.values()].map(p=>({id:p.id,name:p.name,color:p.color,regions:this.owned(p).length,regionSeconds:p.regionSeconds})).sort((a,b)=>b.regions-a.regions||b.regionSeconds-a.regionSeconds||a.name.localeCompare(b.name)).slice(0,10)};}
+  snapshot(){return {version:BALANCE_VERSION,seed:this.seed,phase:this.phase,lobbySize:this.lobbySize,placementRemaining:this.placementRemaining,pads:this.pads,availablePads:this.pads.filter(id=>this.regions[id].ownerId===null),reservedPads:this.pads.filter(id=>this.regions[id].ownerId!==null),map:this.map,profiles:PROFILES,treatments:TREATMENTS,research:RESEARCH,elapsed:this.elapsed,remaining:Math.max(0,this.matchSeconds-this.elapsed),winner:this.winner,result:this.result,hold:{playerId:this.holdLeader,seconds:this.holdSeconds},commandOutcomes:this.commandLog.slice(-100).map(({message,...entry})=>({...entry,type:entry.type??message?.type})),players:[...this.players.values()].map(({credential,...p})=>p),regions:this.regions,convoys:this.convoys,contests:[...this.contests.values()],leaderboard:[...this.players.values()].map(p=>({id:p.id,name:p.name,color:p.color,regions:this.owned(p).length,regionSeconds:p.regionSeconds})).sort((a,b)=>b.regions-a.regions||b.regionSeconds-a.regionSeconds||a.name.localeCompare(b.name)).slice(0,10)};}
 }
