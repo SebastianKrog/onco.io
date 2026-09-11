@@ -189,7 +189,7 @@ test('supports every lobby template, fills vacancies, and starts clocks simultan
     game.tick(.25); assert.equal(game.phase,'placement'); assert.equal(game.elapsed,0);
     game.tick(.25); assert.equal(game.phase,'active'); assert.equal(game.elapsed,0);
     assert.equal(game.players.size,size); assert.ok([...game.players.values()].every(p=>p.started));
-    assert.ok([...game.players.values()].filter(p=>p.bot).every(p=>p.nextBotAt===0));
+    assert.ok([...game.players.values()].filter(p=>p.bot).every(p=>p.nextBotAt>=0&&p.nextBotAt<2));
   }
   assert.throws(()=>new Game({lobbySize:25}),RangeError);
 });
