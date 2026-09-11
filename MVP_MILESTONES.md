@@ -201,14 +201,14 @@ acceptance criteria.
 
 ## Milestone 7 — Balance configuration, telemetry, and release gate
 
-- [ ] **Centralize versioned balance data.** Move match settings, economy values,
+- [x] **Centralize versioned balance data.** Move match settings, economy values,
   treatments, research, infrastructure, movement, contest, programme, and bot
   thresholds into one immutable versioned configuration exposed in match metadata.
-- [ ] **Record match telemetry.** Capture elimination, region-seconds, research,
+- [x] **Record match telemetry.** Capture elimination, region-seconds, research,
   treatment output, factory use, redirected and unused funding, dispatches, routes,
   launch force ratios, contest durations, programmes, and victory type, separating
   human decisions from each bot policy.
-- [ ] **Build a deterministic replay check.** Re-run a match from its seed,
+- [x] **Build a deterministic replay check.** Re-run a match from its seed,
   configuration version, companies, and accepted command sequence and assert the
   same boundary snapshots and result.
 - [ ] **Automate every MVP acceptance scenario.** Add explicit tests for all 22
