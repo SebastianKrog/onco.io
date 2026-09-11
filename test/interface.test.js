@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { Game } from '../server/game.js';
 
 const source = name => readFile(new URL(`../public/${name}`, import.meta.url), 'utf8');
-const makeGame=()=>{let id=0;return new Game({random:()=>.2,id:()=>`m6-${++id}`});};
+const makeGame=()=>{let id=0;return new Game({random:()=>.2,id:()=>`interface-${++id}`});};
 
 test('snapshot provides complete operational metrics and selected-region intelligence',()=>{
   const game=makeGame(),player=game.addPlayer('Calm Network');game.start(player,0);player.productionPin=0;player.developmentPin=0;player.researchSpend=2;player.infrastructureSpend=1;

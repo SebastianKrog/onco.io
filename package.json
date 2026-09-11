@@ -9,6 +9,23 @@
     "test": "node --test",
     "test:coverage": "node --test --experimental-test-coverage --test-coverage-lines=95 --test-coverage-branches=80 --test-coverage-functions=80",
     "playtest:balance": "node server/playtest-runner.js",
-    "playtest:verify": "node server/playtest-runner.js --verify"
+    "playtest:verify": "node server/playtest-runner.js --verify",
+    "test:unit": "node --test test/game.test.js test/map.test.js test/playtest.test.js",
+    "test:integration": "node --test test/integration-lobby.test.js test/app.test.js test/economy-research.test.js test/logistics-contests.test.js test/automation-programmes.test.js test/interface.test.js test/balance-telemetry-replay.test.js test/playtest-runner.test.js",
+    "test:unit:20": "LOBBY_SIZE=20 npm run test:unit",
+    "test:unit:30": "LOBBY_SIZE=30 npm run test:unit",
+    "test:unit:40": "LOBBY_SIZE=40 npm run test:unit",
+    "test:integration:20": "LOBBY_SIZE=20 npm run test:integration",
+    "test:integration:30": "LOBBY_SIZE=30 npm run test:integration",
+    "test:integration:40": "LOBBY_SIZE=40 npm run test:integration",
+    "test:unit:all": "npm run test:unit:20 && npm run test:unit:30 && npm run test:unit:40",
+    "test:integration:all": "npm run test:integration:20 && npm run test:integration:30 && npm run test:integration:40",
+    "test:browser": "node server/browser-runner.js",
+    "test:load": "node server/load-runner.js",
+    "release:gate": "node server/release-runner.js"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "playwright": "^1.63.0"
   }
 }

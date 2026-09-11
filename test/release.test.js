@@ -1,22 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { BALANCE } from '../server/balance.js';
 import { Game } from '../server/game.js';
-import { RELEASE_GATE, evaluateReleaseGate } from '../server/release.js';
+import { RELEASE_ARTIFACT_URL, RELEASE_EVIDENCE_VERSION, RELEASE_GATE, evaluateReleaseGate } from '../server/release.js';
+import { parseDeviationReview } from '../server/release-runner.js';
 
-test('release gate requires seven check classes for every supported lobby size', () => {
-  assert.deepEqual(RELEASE_GATE.lobbySizes,[20,30,40]);assert.equal(RELEASE_GATE.acceptanceScenarios.length,22);assert.equal(Object.isFrozen(RELEASE_GATE),true);
-  const lobbyResults=Object.fromEntries(RELEASE_GATE.lobbySizes.map(size=>[size,{pass:true,matches:3}]));
-  const evidence={checks:{},acceptanceScenarios:{},verifiedCampaign:{verified:true,balanceVersion:RELEASE_GATE.balanceVersion,lobbyResults},deviationsDocumented:true};
-  for(const check of RELEASE_GATE.checks)evidence.checks[check]=Object.fromEntries(RELEASE_GATE.lobbySizes.map(size=>[size,true]));
-  for(const scenario of RELEASE_GATE.acceptanceScenarios)evidence.acceptanceScenarios[scenario]=true;
-  assert.equal(evaluateReleaseGate(evidence).ready,true);
-  assert.equal(new Game({columns:2,rows:2,releaseEvidence:evidence}).snapshot().releaseGate.ready,true);
-  evidence.checks.load[40]=false;const failed=evaluateReleaseGate(evidence);assert.equal(failed.ready,false);assert.ok(failed.blockers.includes('load checks'));
-});
+const evidence=()=>{const now=new Date().toISOString(),artifacts=[];for(const checkClass of RELEASE_GATE.checks)for(const lobbySize of RELEASE_GATE.lobbySizes)artifacts.push({schemaVersion:RELEASE_EVIDENCE_VERSION,checkClass,lobbySize,balanceVersion:BALANCE.version,success:true,exitCode:0,command:'verified command',startedAt:now,finishedAt:now,assertions:{total:22,passed:22},...(checkClass==='acceptance'?{scenarioIds:[...RELEASE_GATE.acceptanceScenarios]}:{}),...(checkClass==='replay'?{boundaries:{total:2,verified:2,divergences:0}}:{}),...(checkClass==='browser'?{renderedPage:true,serverStateObserved:true}:{}),...(checkClass==='accessibility'?{axe:true,viewport:{width:1280,height:800}}:{}),...(checkClass==='load'?{thresholds:{p95:25},measurements:{p95CommandLatencyMs:1}}:{})});return {schemaVersion:RELEASE_EVIDENCE_VERSION,balanceVersion:BALANCE.version,artifacts,verifiedCampaign:{verified:true,pass:true,balanceVersion:BALANCE.version,lobbyResults:{20:{pass:true,matches:3},30:{pass:true,matches:3},40:{pass:true,matches:3}}},deviationReview:{source:'GAMEPLAY_SPEC.md',valid:true,none:true,acceptedCount:0}};};
 
-test('missing evidence remains visibly blocked on server and client', async () => {
-  const state=new Game({columns:2,rows:2}).snapshot(),gate=state.releaseGate;assert.equal(gate.ready,false);assert.ok(gate.blockers.includes('multiplayer playtests'));assert.equal(gate.acceptanceScenarios.length,22);assert.equal(state.acceptance.complete,true);
-  const [html,client]=await Promise.all([readFile(new URL('../public/index.html',import.meta.url),'utf8'),readFile(new URL('../public/client.js',import.meta.url),'utf8')]);
-  assert.match(html,/id="release-status"/);assert.match(client,/state\.releaseGate/);assert.match(client,/evidence groups/);
-});
+test('versioned artifact evidence passes and bare booleans cannot assert readiness',()=>{assert.equal(evaluateReleaseGate(evidence()).ready,true);assert.equal(evaluateReleaseGate({checks:{unit:{20:true,30:true,40:true}},deviationsDocumented:true}).ready,false);assert.deepEqual(new Game({columns:2,rows:2,releaseEvidence:{}}).snapshot().releaseGate,new Game({columns:2,rows:2}).snapshot().releaseGate);});
+test('rejects missing lobby sizes, failures, stale versions, duplicates, and malformed reports',()=>{for(const mutate of [e=>e.artifacts.splice(e.artifacts.findIndex(x=>x.lobbySize===40),1),e=>e.artifacts[0].exitCode=1,e=>e.artifacts[0].balanceVersion='stale',e=>e.artifacts.push({...e.artifacts[0]}),e=>delete e.artifacts.find(x=>x.checkClass==='browser').renderedPage,e=>e.artifacts.find(x=>x.checkClass==='load').assertions={total:5,passed:4}]){const x=evidence();mutate(x);assert.equal(evaluateReleaseGate(x).ready,false);}});
+test('rejects incomplete acceptance IDs, replay divergence, and insufficient playtests',()=>{const a=evidence();a.artifacts.find(x=>x.checkClass==='acceptance').scenarioIds.pop();assert.equal(evaluateReleaseGate(a).ready,false);const r=evidence();r.artifacts.find(x=>x.checkClass==='replay').boundaries.divergences=1;assert.equal(evaluateReleaseGate(r).ready,false);const p=evidence();p.verifiedCampaign.lobbyResults[30].matches=2;assert.equal(evaluateReleaseGate(p).ready,false);});
+test('deviation review is derived from the normative machine-readable section',async()=>{const spec=await readFile(new URL('../GAMEPLAY_SPEC.md',import.meta.url),'utf8');assert.deepEqual(parseDeviationReview(spec),{source:'GAMEPLAY_SPEC.md',valid:true,none:true,acceptedCount:0,failures:[]});assert.equal(parseDeviationReview('## Accepted deviations').valid,false);const e=evidence();e.deviationReview={source:'GAMEPLAY_SPEC.md',valid:false};assert.equal(evaluateReleaseGate(e).ready,false);});
+test('the checked-in end-to-end runner artifact is accepted by the evaluator',async()=>{const actual=JSON.parse(await readFile(RELEASE_ARTIFACT_URL,'utf8'));assert.equal(actual.ready,true);assert.equal(evaluateReleaseGate(actual).ready,true);});

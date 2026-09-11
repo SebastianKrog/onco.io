@@ -1,0 +1,1561 @@
+{
+  "schemaVersion": 2,
+  "balanceVersion": "0.2",
+  "startedAt": "2026-09-11T19:53:05.088Z",
+  "finishedAt": "2026-09-11T19:55:01.316Z",
+  "commands": [
+    "/root/.nvm/versions/node/v24.15.0/bin/node --test test/game.test.js test/map.test.js test/playtest.test.js",
+    "/root/.nvm/versions/node/v24.15.0/bin/node --test test/integration-lobby.test.js test/app.test.js test/economy-research.test.js test/logistics-contests.test.js test/automation-programmes.test.js test/interface.test.js test/balance-telemetry-replay.test.js test/playtest-runner.test.js",
+    "/root/.nvm/versions/node/v24.15.0/bin/node --test test/mvp-acceptance.test.js",
+    "LOBBY_SIZE=20 node server/browser-runner.js",
+    "LOBBY_SIZE=20 node server/browser-runner.js",
+    "LOBBY_SIZE=20 node server/load-runner.js",
+    "/root/.nvm/versions/node/v24.15.0/bin/node --test test/game.test.js test/map.test.js test/playtest.test.js",
+    "/root/.nvm/versions/node/v24.15.0/bin/node --test test/integration-lobby.test.js test/app.test.js test/economy-research.test.js test/logistics-contests.test.js test/automation-programmes.test.js test/interface.test.js test/balance-telemetry-replay.test.js test/playtest-runner.test.js",
+    "/root/.nvm/versions/node/v24.15.0/bin/node --test test/mvp-acceptance.test.js",
+    "LOBBY_SIZE=30 node server/browser-runner.js",
+    "LOBBY_SIZE=30 node server/browser-runner.js",
+    "LOBBY_SIZE=30 node server/load-runner.js",
+    "/root/.nvm/versions/node/v24.15.0/bin/node --test test/game.test.js test/map.test.js test/playtest.test.js",
+    "/root/.nvm/versions/node/v24.15.0/bin/node --test test/integration-lobby.test.js test/app.test.js test/economy-research.test.js test/logistics-contests.test.js test/automation-programmes.test.js test/interface.test.js test/balance-telemetry-replay.test.js test/playtest-runner.test.js",
+    "/root/.nvm/versions/node/v24.15.0/bin/node --test test/mvp-acceptance.test.js",
+    "LOBBY_SIZE=40 node server/browser-runner.js",
+    "LOBBY_SIZE=40 node server/browser-runner.js",
+    "LOBBY_SIZE=40 node server/load-runner.js",
+    "node server/playtest-runner.js --verify",
+    "node server/playtest-runner.js --verify",
+    "node server/playtest-runner.js --verify"
+  ],
+  "artifacts": [
+    {
+      "schemaVersion": 2,
+      "checkClass": "unit",
+      "lobbySize": 20,
+      "balanceVersion": "0.2",
+      "command": "/root/.nvm/versions/node/v24.15.0/bin/node --test test/game.test.js test/map.test.js test/playtest.test.js",
+      "startedAt": "2026-09-11T19:53:05.089Z",
+      "finishedAt": "2026-09-11T19:53:06.800Z",
+      "exitCode": 0,
+      "success": true,
+      "assertions": {
+        "total": 1,
+        "passed": 1
+      },
+      "total": 1
+    },
+    {
+      "schemaVersion": 2,
+      "checkClass": "integration",
+      "lobbySize": 20,
+      "balanceVersion": "0.2",
+      "command": "/root/.nvm/versions/node/v24.15.0/bin/node --test test/integration-lobby.test.js test/app.test.js test/economy-research.test.js test/logistics-contests.test.js test/automation-programmes.test.js test/interface.test.js test/balance-telemetry-replay.test.js test/playtest-runner.test.js",
+      "startedAt": "2026-09-11T19:53:06.800Z",
+      "finishedAt": "2026-09-11T19:53:10.550Z",
+      "exitCode": 0,
+      "success": true,
+      "assertions": {
+        "total": 1,
+        "passed": 1
+      },
+      "total": 1
+    },
+    {
+      "schemaVersion": 2,
+      "checkClass": "acceptance",
+      "lobbySize": 20,
+      "balanceVersion": "0.2",
+      "command": "/root/.nvm/versions/node/v24.15.0/bin/node --test test/mvp-acceptance.test.js",
+      "startedAt": "2026-09-11T19:53:10.550Z",
+      "finishedAt": "2026-09-11T19:53:11.127Z",
+      "exitCode": 0,
+      "success": true,
+      "assertions": {
+        "total": 22,
+        "passed": 22
+      },
+      "total": 22,
+      "scenarioIds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22
+      ]
+    },
+    {
+      "schemaVersion": 2,
+      "checkClass": "browser",
+      "lobbySize": 20,
+      "balanceVersion": "0.2",
+      "command": "LOBBY_SIZE=20 node server/browser-runner.js",
+      "startedAt": "2026-09-11T19:53:11.127Z",
+      "finishedAt": "2026-09-11T19:53:25.959Z",
+      "exitCode": 0,
+      "success": true,
+      "assertions": {
+        "total": 6,
+        "passed": 6,
+        "results": [
+          {
+            "id": "connect-and-specialty",
+            "pass": true,
+            "detail": ""
+          },
+          {
+            "id": "official-placement",
+            "pass": true,
+            "detail": ""
+          },
+          {
+            "id": "gameplay-controls",
+            "pass": true,
+            "detail": ""
+          },
+          {
+            "id": "disconnect-reconnect",
+            "pass": true,
+            "detail": ""
+          },
+          {
+            "id": "surrender",
+            "pass": true,
+            "detail": ""
+          },
+          {
+            "id": "spectate-after-start",
+            "pass": true,
+            "detail": ""
+          }
+        ]
+      },
+      "total": 6,
+      "renderedPage": true,
+      "serverStateObserved": true
+    },
+    {
+      "schemaVersion": 2,
+      "checkClass": "accessibility",
+      "lobbySize": 20,
+      "balanceVersion": "0.2",
+      "command": "LOBBY_SIZE=20 node server/browser-runner.js",
+      "startedAt": "2026-09-11T19:53:11.127Z",
+      "finishedAt": "2026-09-11T19:53:25.959Z",
+      "exitCode": 0,
+      "success": true,
+      "assertions": {
+        "total": 5,
+        "passed": 5,
+        "results": [
+          {
+            "id": "keyboard-map-and-focus",
+            "pass": true,
+            "detail": ""
+          },
+          {
+            "id": "accessible-names",
+            "pass": true,
+            "detail": ""
+          },
+          {
+            "id": "live-announcements",
+            "pass": true,
+            "detail": ""
+          },
+          {
+            "id": "non-colour-cues",
+            "pass": true,
+            "detail": ""
+          },
+          {
+            "id": "automated-accessibility-rules",
+            "pass": true,
+            "detail": ""
+          }
+        ]
+      },
+      "total": 5,
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "axe": true
+    },
+    {
+      "schemaVersion": 2,
+      "checkClass": "load",
+      "lobbySize": 20,
+      "balanceVersion": "0.2",
+      "command": "LOBBY_SIZE=20 node server/load-runner.js",
+      "startedAt": "2026-09-11T19:53:25.959Z",
+      "finishedAt": "2026-09-11T19:53:26.135Z",
+      "exitCode": 0,
+      "success": true,
+      "assertions": {
+        "total": 5,
+        "passed": 5
+      },
+      "total": 5,
+      "thresholds": {
+        "p95CommandLatencyMs": 25,
+        "fixedStepDriftMs": 20,
+        "errors": 0,
+        "heapGrowthMb": 64,
+        "eventLoopDelayP99Ms": 30
+      },
+      "measurements": {
+        "companies": 20,
+        "commands": 600,
+        "broadcastSnapshots": 30,
+        "reconnects": 20,
+        "representativeSeconds": 30,
+        "p95CommandLatencyMs": 0.014648000000306638,
+        "fixedSteps": 120,
+        "fixedStepDriftMs": 1.1985010083333387,
+        "errors": 0,
+        "heapGrowthMb": 0,
+        "eventLoopDelayP99Ms": 18.481151
+      }
+    },
+    {
+      "schemaVersion": 2,
+      "checkClass": "unit",
+      "lobbySize": 30,
+      "balanceVersion": "0.2",
+      "command": "/root/.nvm/versions/node/v24.15.0/bin/node --test test/game.test.js test/map.test.js test/playtest.test.js",
+      "startedAt": "2026-09-11T19:53:26.135Z",
+      "finishedAt": "2026-09-11T19:53:28.078Z",
+      "exitCode": 0,
+      "success": true,
+      "assertions": {
+        "total": 1,
+        "passed": 1
+      },
+      "total": 1
+    },
+    {
+      "schemaVersion": 2,
+      "checkClass": "integration",
+      "lobbySize": 30,
+      "balanceVersion": "0.2",
+      "command": "/root/.nvm/versions/node/v24.15.0/bin/node --test test/integration-lobby.test.js test/app.test.js test/economy-research.test.js test/logistics-contests.test.js test/automation-programmes.test.js test/interface.test.js test/balance-telemetry-replay.test.js test/playtest-runner.test.js",
+      "startedAt": "2026-09-11T19:53:28.079Z",
+      "finishedAt": "2026-09-11T19:53:32.034Z",
+      "exitCode": 0,
+      "success": true,
+      "assertions": {
+        "total": 1,
+        "passed": 1
+      },
+      "total": 1
+    },
+    {
+      "schemaVersion": 2,
+      "checkClass": "acceptance",
+      "lobbySize": 30,
+      "balanceVersion": "0.2",
+      "command": "/root/.nvm/versions/node/v24.15.0/bin/node --test test/mvp-acceptance.test.js",
+      "startedAt": "2026-09-11T19:53:32.034Z",
+      "finishedAt": "2026-09-11T19:53:32.818Z",
+      "exitCode": 0,
+      "success": true,
+      "assertions": {
+        "total": 22,
+        "passed": 22
+      },
+      "total": 22,
+      "scenarioIds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22
+      ]
+    },
+    {
+      "schemaVersion": 2,
+      "checkClass": "browser",
+      "lobbySize": 30,
+      "balanceVersion": "0.2",
+      "command": "LOBBY_SIZE=30 node server/browser-runner.js",
+      "startedAt": "2026-09-11T19:53:32.818Z",
+      "finishedAt": "2026-09-11T19:53:52.185Z",
+      "exitCode": 0,
+      "success": true,
+      "assertions": {
+        "total": 6,
+        "passed": 6,
+        "results": [
+          {
+            "id": "connect-and-specialty",
+            "pass": true,
+            "detail": ""
+          },
+          {
+            "id": "official-placement",
+            "pass": true,
+            "detail": ""
+          },
+          {
+            "id": "gameplay-controls",
+            "pass": true,
+            "detail": ""
+          },
+          {
+            "id": "disconnect-reconnect",
+            "pass": true,
+            "detail": ""
+          },
+          {
+            "id": "surrender",
+            "pass": true,
+            "detail": ""
+          },
+          {
+            "id": "spectate-after-start",
+            "pass": true,
+            "detail": ""
+          }
+        ]
+      },
+      "total": 6,
+      "renderedPage": true,
+      "serverStateObserved": true
+    },
+    {
+      "schemaVersion": 2,
+      "checkClass": "accessibility",
+      "lobbySize": 30,
+      "balanceVersion": "0.2",
+      "command": "LOBBY_SIZE=30 node server/browser-runner.js",
+      "startedAt": "2026-09-11T19:53:32.818Z",
+      "finishedAt": "2026-09-11T19:53:52.185Z",
+      "exitCode": 0,
+      "success": true,
+      "assertions": {
+        "total": 5,
+        "passed": 5,
+        "results": [
+          {
+            "id": "keyboard-map-and-focus",
+            "pass": true,
+            "detail": ""
+          },
+          {
+            "id": "accessible-names",
+            "pass": true,
+            "detail": ""
+          },
+          {
+            "id": "live-announcements",
+            "pass": true,
+            "detail": ""
+          },
+          {
+            "id": "non-colour-cues",
+            "pass": true,
+            "detail": ""
+          },
+          {
+            "id": "automated-accessibility-rules",
+            "pass": true,
+            "detail": ""
+          }
+        ]
+      },
+      "total": 5,
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "axe": true
+    },
+    {
+      "schemaVersion": 2,
+      "checkClass": "load",
+      "lobbySize": 30,
+      "balanceVersion": "0.2",
+      "command": "LOBBY_SIZE=30 node server/load-runner.js",
+      "startedAt": "2026-09-11T19:53:52.185Z",
+      "finishedAt": "2026-09-11T19:53:52.420Z",
+      "exitCode": 0,
+      "success": true,
+      "assertions": {
+        "total": 5,
+        "passed": 5
+      },
+      "total": 5,
+      "thresholds": {
+        "p95CommandLatencyMs": 25,
+        "fixedStepDriftMs": 20,
+        "errors": 0,
+        "heapGrowthMb": 64,
+        "eventLoopDelayP99Ms": 30
+      },
+      "measurements": {
+        "companies": 30,
+        "commands": 900,
+        "broadcastSnapshots": 30,
+        "reconnects": 30,
+        "representativeSeconds": 30,
+        "p95CommandLatencyMs": 0.005998000000545289,
+        "fixedSteps": 120,
+        "fixedStepDriftMs": 1.6923020083332934,
+        "errors": 0,
+        "heapGrowthMb": 0,
+        "eventLoopDelayP99Ms": 19.251199
+      }
+    },
+    {
+      "schemaVersion": 2,
+      "checkClass": "unit",
+      "lobbySize": 40,
+      "balanceVersion": "0.2",
+      "command": "/root/.nvm/versions/node/v24.15.0/bin/node --test test/game.test.js test/map.test.js test/playtest.test.js",
+      "startedAt": "2026-09-11T19:53:52.421Z",
+      "finishedAt": "2026-09-11T19:53:54.145Z",
+      "exitCode": 0,
+      "success": true,
+      "assertions": {
+        "total": 1,
+        "passed": 1
+      },
+      "total": 1
+    },
+    {
+      "schemaVersion": 2,
+      "checkClass": "integration",
+      "lobbySize": 40,
+      "balanceVersion": "0.2",
+      "command": "/root/.nvm/versions/node/v24.15.0/bin/node --test test/integration-lobby.test.js test/app.test.js test/economy-research.test.js test/logistics-contests.test.js test/automation-programmes.test.js test/interface.test.js test/balance-telemetry-replay.test.js test/playtest-runner.test.js",
+      "startedAt": "2026-09-11T19:53:54.146Z",
+      "finishedAt": "2026-09-11T19:53:58.203Z",
+      "exitCode": 0,
+      "success": true,
+      "assertions": {
+        "total": 1,
+        "passed": 1
+      },
+      "total": 1
+    },
+    {
+      "schemaVersion": 2,
+      "checkClass": "acceptance",
+      "lobbySize": 40,
+      "balanceVersion": "0.2",
+      "command": "/root/.nvm/versions/node/v24.15.0/bin/node --test test/mvp-acceptance.test.js",
+      "startedAt": "2026-09-11T19:53:58.203Z",
+      "finishedAt": "2026-09-11T19:53:58.854Z",
+      "exitCode": 0,
+      "success": true,
+      "assertions": {
+        "total": 22,
+        "passed": 22
+      },
+      "total": 22,
+      "scenarioIds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22
+      ]
+    },
+    {
+      "schemaVersion": 2,
+      "checkClass": "browser",
+      "lobbySize": 40,
+      "balanceVersion": "0.2",
+      "command": "LOBBY_SIZE=40 node server/browser-runner.js",
+      "startedAt": "2026-09-11T19:53:58.854Z",
+      "finishedAt": "2026-09-11T19:54:22.223Z",
+      "exitCode": 0,
+      "success": true,
+      "assertions": {
+        "total": 6,
+        "passed": 6,
+        "results": [
+          {
+            "id": "connect-and-specialty",
+            "pass": true,
+            "detail": ""
+          },
+          {
+            "id": "official-placement",
+            "pass": true,
+            "detail": ""
+          },
+          {
+            "id": "gameplay-controls",
+            "pass": true,
+            "detail": ""
+          },
+          {
+            "id": "disconnect-reconnect",
+            "pass": true,
+            "detail": ""
+          },
+          {
+            "id": "surrender",
+            "pass": true,
+            "detail": ""
+          },
+          {
+            "id": "spectate-after-start",
+            "pass": true,
+            "detail": ""
+          }
+        ]
+      },
+      "total": 6,
+      "renderedPage": true,
+      "serverStateObserved": true
+    },
+    {
+      "schemaVersion": 2,
+      "checkClass": "accessibility",
+      "lobbySize": 40,
+      "balanceVersion": "0.2",
+      "command": "LOBBY_SIZE=40 node server/browser-runner.js",
+      "startedAt": "2026-09-11T19:53:58.854Z",
+      "finishedAt": "2026-09-11T19:54:22.223Z",
+      "exitCode": 0,
+      "success": true,
+      "assertions": {
+        "total": 5,
+        "passed": 5,
+        "results": [
+          {
+            "id": "keyboard-map-and-focus",
+            "pass": true,
+            "detail": ""
+          },
+          {
+            "id": "accessible-names",
+            "pass": true,
+            "detail": ""
+          },
+          {
+            "id": "live-announcements",
+            "pass": true,
+            "detail": ""
+          },
+          {
+            "id": "non-colour-cues",
+            "pass": true,
+            "detail": ""
+          },
+          {
+            "id": "automated-accessibility-rules",
+            "pass": true,
+            "detail": ""
+          }
+        ]
+      },
+      "total": 5,
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "axe": true
+    },
+    {
+      "schemaVersion": 2,
+      "checkClass": "load",
+      "lobbySize": 40,
+      "balanceVersion": "0.2",
+      "command": "LOBBY_SIZE=40 node server/load-runner.js",
+      "startedAt": "2026-09-11T19:54:22.223Z",
+      "finishedAt": "2026-09-11T19:54:22.504Z",
+      "exitCode": 0,
+      "success": true,
+      "assertions": {
+        "total": 5,
+        "passed": 5
+      },
+      "total": 5,
+      "thresholds": {
+        "p95CommandLatencyMs": 25,
+        "fixedStepDriftMs": 20,
+        "errors": 0,
+        "heapGrowthMb": 64,
+        "eventLoopDelayP99Ms": 30
+      },
+      "measurements": {
+        "companies": 40,
+        "commands": 1200,
+        "broadcastSnapshots": 30,
+        "reconnects": 40,
+        "representativeSeconds": 30,
+        "p95CommandLatencyMs": 0.004147999992710538,
+        "fixedSteps": 120,
+        "fixedStepDriftMs": 2.0835612000000157,
+        "errors": 0,
+        "heapGrowthMb": 0,
+        "eventLoopDelayP99Ms": 19.447807
+      }
+    },
+    {
+      "schemaVersion": 2,
+      "checkClass": "replay",
+      "lobbySize": 20,
+      "balanceVersion": "0.2",
+      "command": "node server/playtest-runner.js --verify",
+      "startedAt": "2026-09-11T19:53:05.088Z",
+      "finishedAt": "2026-09-11T19:55:01.314Z",
+      "exitCode": 0,
+      "success": true,
+      "assertions": {
+        "total": 432,
+        "passed": 432
+      },
+      "total": 432,
+      "boundaries": {
+        "total": 432,
+        "verified": 432,
+        "divergences": 0
+      },
+      "replaySeeds": [
+        "clinical-alpha",
+        "clinical-beta",
+        "clinical-gamma"
+      ]
+    },
+    {
+      "schemaVersion": 2,
+      "checkClass": "replay",
+      "lobbySize": 30,
+      "balanceVersion": "0.2",
+      "command": "node server/playtest-runner.js --verify",
+      "startedAt": "2026-09-11T19:53:05.088Z",
+      "finishedAt": "2026-09-11T19:55:01.314Z",
+      "exitCode": 0,
+      "success": true,
+      "assertions": {
+        "total": 432,
+        "passed": 432
+      },
+      "total": 432,
+      "boundaries": {
+        "total": 432,
+        "verified": 432,
+        "divergences": 0
+      },
+      "replaySeeds": [
+        "clinical-alpha",
+        "clinical-beta",
+        "clinical-gamma"
+      ]
+    },
+    {
+      "schemaVersion": 2,
+      "checkClass": "replay",
+      "lobbySize": 40,
+      "balanceVersion": "0.2",
+      "command": "node server/playtest-runner.js --verify",
+      "startedAt": "2026-09-11T19:53:05.088Z",
+      "finishedAt": "2026-09-11T19:55:01.314Z",
+      "exitCode": 0,
+      "success": true,
+      "assertions": {
+        "total": 432,
+        "passed": 432
+      },
+      "total": 432,
+      "boundaries": {
+        "total": 432,
+        "verified": 432,
+        "divergences": 0
+      },
+      "replaySeeds": [
+        "clinical-alpha",
+        "clinical-beta",
+        "clinical-gamma"
+      ]
+    }
+  ],
+  "perLobby": {
+    "20": [
+      {
+        "checkClass": "unit",
+        "success": true
+      },
+      {
+        "checkClass": "integration",
+        "success": true
+      },
+      {
+        "checkClass": "acceptance",
+        "success": true
+      },
+      {
+        "checkClass": "browser",
+        "success": true
+      },
+      {
+        "checkClass": "accessibility",
+        "success": true
+      },
+      {
+        "checkClass": "load",
+        "success": true
+      },
+      {
+        "checkClass": "replay",
+        "success": true
+      }
+    ],
+    "30": [
+      {
+        "checkClass": "unit",
+        "success": true
+      },
+      {
+        "checkClass": "integration",
+        "success": true
+      },
+      {
+        "checkClass": "acceptance",
+        "success": true
+      },
+      {
+        "checkClass": "browser",
+        "success": true
+      },
+      {
+        "checkClass": "accessibility",
+        "success": true
+      },
+      {
+        "checkClass": "load",
+        "success": true
+      },
+      {
+        "checkClass": "replay",
+        "success": true
+      }
+    ],
+    "40": [
+      {
+        "checkClass": "unit",
+        "success": true
+      },
+      {
+        "checkClass": "integration",
+        "success": true
+      },
+      {
+        "checkClass": "acceptance",
+        "success": true
+      },
+      {
+        "checkClass": "browser",
+        "success": true
+      },
+      {
+        "checkClass": "accessibility",
+        "success": true
+      },
+      {
+        "checkClass": "load",
+        "success": true
+      },
+      {
+        "checkClass": "replay",
+        "success": true
+      }
+    ]
+  },
+  "acceptanceScenarios": [
+    {
+      "id": 1,
+      "title": "Opening income and R02 timing",
+      "automated": true
+    },
+    {
+      "id": 2,
+      "title": "Factory processing limits",
+      "automated": true
+    },
+    {
+      "id": 3,
+      "title": "Economy conservation",
+      "automated": true
+    },
+    {
+      "id": 4,
+      "title": "Research graph and schedule",
+      "automated": true
+    },
+    {
+      "id": 5,
+      "title": "Packet percentages and minimums",
+      "automated": true
+    },
+    {
+      "id": 6,
+      "title": "All-supply dispatch behavior",
+      "automated": true
+    },
+    {
+      "id": 7,
+      "title": "Three-edge R11 routing",
+      "automated": true
+    },
+    {
+      "id": 8,
+      "title": "Broken route and source loss",
+      "automated": true
+    },
+    {
+      "id": 9,
+      "title": "Pressure conservation",
+      "automated": true
+    },
+    {
+      "id": 10,
+      "title": "Contest examples and mutual exhaustion",
+      "automated": true
+    },
+    {
+      "id": 11,
+      "title": "Persistent multi-attacker disputes",
+      "automated": true
+    },
+    {
+      "id": 12,
+      "title": "Capture downgrade and excess stock",
+      "automated": true
+    },
+    {
+      "id": 13,
+      "title": "Capture income and dominance timing",
+      "automated": true
+    },
+    {
+      "id": 14,
+      "title": "Arrival and regeneration timing",
+      "automated": true
+    },
+    {
+      "id": 15,
+      "title": "Continuity programme lifecycle",
+      "automated": true
+    },
+    {
+      "id": 16,
+      "title": "Order-independent arrival aggregation",
+      "automated": true
+    },
+    {
+      "id": 17,
+      "title": "Withdrawal conservation",
+      "automated": true
+    },
+    {
+      "id": 18,
+      "title": "Commitment grandfathering",
+      "automated": true
+    },
+    {
+      "id": 19,
+      "title": "Bot reserve and programme recovery",
+      "automated": true
+    },
+    {
+      "id": 20,
+      "title": "Surrender and reconnect control",
+      "automated": true
+    },
+    {
+      "id": 21,
+      "title": "Simultaneous loss and capture",
+      "automated": true
+    },
+    {
+      "id": 22,
+      "title": "Command rejection atomicity",
+      "automated": true
+    }
+  ],
+  "verifiedCampaign": {
+    "artifactVersion": 1,
+    "balanceVersion": "0.2",
+    "minimumSamples": 3,
+    "lobbyResults": {
+      "20": {
+        "balanceVersion": "0.2",
+        "matches": 3,
+        "submitted": 3,
+        "minimumSamples": 3,
+        "targets": {
+          "opening": {
+            "samples": 3,
+            "observed": 3,
+            "missing": 0,
+            "mean": 0,
+            "min": 0,
+            "max": 0,
+            "median": 0,
+            "values": [
+              0,
+              0,
+              0
+            ],
+            "classifications": {
+              "observed": 3,
+              "not-observed": 0
+            },
+            "onTarget": 3,
+            "onTargetShare": 1,
+            "pass": true
+          },
+          "neutralCapture": {
+            "samples": 3,
+            "observed": 3,
+            "missing": 0,
+            "mean": 286.8333333333333,
+            "min": 203,
+            "max": 348.25,
+            "median": 309.25,
+            "values": [
+              203,
+              309.25,
+              348.25
+            ],
+            "classifications": {
+              "observed": 3,
+              "not-observed": 0
+            },
+            "onTarget": 3,
+            "onTargetShare": 1,
+            "pass": true
+          },
+          "firstResearch": {
+            "samples": 3,
+            "observed": 3,
+            "missing": 0,
+            "mean": 152.83333333333334,
+            "min": 146.25,
+            "max": 156.75,
+            "median": 155.5,
+            "values": [
+              146.25,
+              155.5,
+              156.75
+            ],
+            "classifications": {
+              "observed": 3,
+              "not-observed": 0
+            },
+            "onTarget": 3,
+            "onTargetShare": 1,
+            "pass": true
+          },
+          "firstContest": {
+            "samples": 3,
+            "observed": 2,
+            "missing": 1,
+            "mean": 274,
+            "min": 257,
+            "max": 291,
+            "median": 257,
+            "values": [
+              257,
+              291
+            ],
+            "classifications": {
+              "observed": 2,
+              "not-observed": 1
+            },
+            "onTarget": 2,
+            "onTargetShare": 0.6666666666666666,
+            "pass": true
+          },
+          "ordinaryContest": {
+            "samples": 3,
+            "observed": 3,
+            "missing": 0,
+            "mean": 4.489615384615385,
+            "min": 1.375,
+            "max": 6.403846153846154,
+            "median": 5.69,
+            "values": [
+              1.375,
+              5.69,
+              6.403846153846154
+            ],
+            "classifications": {
+              "observed": 3,
+              "not-observed": 0
+            },
+            "onTarget": 3,
+            "onTargetShare": 1,
+            "pass": true
+          },
+          "advancedProduct": {
+            "samples": 3,
+            "observed": 3,
+            "missing": 0,
+            "mean": 172.33333333333334,
+            "min": 171,
+            "max": 173,
+            "median": 173,
+            "values": [
+              171,
+              173,
+              173
+            ],
+            "classifications": {
+              "observed": 3,
+              "not-observed": 0
+            },
+            "onTarget": 3,
+            "onTargetShare": 1,
+            "pass": true
+          },
+          "completedResearch": {
+            "samples": 3,
+            "observed": 3,
+            "missing": 0,
+            "mean": 10.816666666666668,
+            "min": 10.75,
+            "max": 10.85,
+            "median": 10.85,
+            "values": [
+              10.75,
+              10.85,
+              10.85
+            ],
+            "classifications": {
+              "observed": 3,
+              "not-observed": 0
+            },
+            "onTarget": 3,
+            "onTargetShare": 1,
+            "pass": true
+          },
+          "specialistProduction": {
+            "samples": 3,
+            "observed": 3,
+            "missing": 0,
+            "mean": 26.604683559279646,
+            "min": 23.5923056959932,
+            "max": 28.14661883932525,
+            "median": 28.07512614252049,
+            "values": [
+              23.5923056959932,
+              28.07512614252049,
+              28.14661883932525
+            ],
+            "classifications": {
+              "observed": 3,
+              "not-observed": 0
+            },
+            "onTarget": 3,
+            "onTargetShare": 1,
+            "pass": true
+          },
+          "programmeCounterplay": {
+            "samples": 3,
+            "observed": 2,
+            "missing": 1,
+            "mean": 4.5,
+            "min": 2,
+            "max": 7,
+            "median": 2,
+            "values": [
+              2,
+              7
+            ],
+            "classifications": {
+              "observed": 2,
+              "not-observed": 1
+            },
+            "onTarget": 2,
+            "onTargetShare": 0.6666666666666666,
+            "pass": true
+          }
+        },
+        "victories": {
+          "timed": 3
+        },
+        "victoryDistribution": {
+          "timed": 1
+        },
+        "dominanceShare": 0,
+        "victoryPass": true,
+        "pass": true
+      },
+      "30": {
+        "balanceVersion": "0.2",
+        "matches": 3,
+        "submitted": 3,
+        "minimumSamples": 3,
+        "targets": {
+          "opening": {
+            "samples": 3,
+            "observed": 3,
+            "missing": 0,
+            "mean": 0,
+            "min": 0,
+            "max": 0,
+            "median": 0,
+            "values": [
+              0,
+              0,
+              0
+            ],
+            "classifications": {
+              "observed": 3,
+              "not-observed": 0
+            },
+            "onTarget": 3,
+            "onTargetShare": 1,
+            "pass": true
+          },
+          "neutralCapture": {
+            "samples": 3,
+            "observed": 3,
+            "missing": 0,
+            "mean": 333.3333333333333,
+            "min": 326.5,
+            "max": 341.75,
+            "median": 331.75,
+            "values": [
+              326.5,
+              331.75,
+              341.75
+            ],
+            "classifications": {
+              "observed": 3,
+              "not-observed": 0
+            },
+            "onTarget": 3,
+            "onTargetShare": 1,
+            "pass": true
+          },
+          "firstResearch": {
+            "samples": 3,
+            "observed": 3,
+            "missing": 0,
+            "mean": 325.0833333333333,
+            "min": 316.25,
+            "max": 329.5,
+            "median": 329.5,
+            "values": [
+              316.25,
+              329.5,
+              329.5
+            ],
+            "classifications": {
+              "observed": 3,
+              "not-observed": 0
+            },
+            "onTarget": 3,
+            "onTargetShare": 1,
+            "pass": true
+          },
+          "firstContest": {
+            "samples": 3,
+            "observed": 3,
+            "missing": 0,
+            "mean": 365.5,
+            "min": 337.25,
+            "max": 404.75,
+            "median": 354.5,
+            "values": [
+              337.25,
+              354.5,
+              404.75
+            ],
+            "classifications": {
+              "observed": 3,
+              "not-observed": 0
+            },
+            "onTarget": 3,
+            "onTargetShare": 1,
+            "pass": true
+          },
+          "ordinaryContest": {
+            "samples": 3,
+            "observed": 3,
+            "missing": 0,
+            "mean": 3.905092592592593,
+            "min": 2.8125,
+            "max": 4.861111111111111,
+            "median": 4.041666666666667,
+            "values": [
+              2.8125,
+              4.041666666666667,
+              4.861111111111111
+            ],
+            "classifications": {
+              "observed": 3,
+              "not-observed": 0
+            },
+            "onTarget": 3,
+            "onTargetShare": 1,
+            "pass": true
+          },
+          "advancedProduct": {
+            "samples": 3,
+            "observed": 3,
+            "missing": 0,
+            "mean": 330.1666666666667,
+            "min": 323,
+            "max": 333.75,
+            "median": 333.75,
+            "values": [
+              323,
+              333.75,
+              333.75
+            ],
+            "classifications": {
+              "observed": 3,
+              "not-observed": 0
+            },
+            "onTarget": 3,
+            "onTargetShare": 1,
+            "pass": true
+          },
+          "completedResearch": {
+            "samples": 3,
+            "observed": 3,
+            "missing": 0,
+            "mean": 10.9,
+            "min": 10.833333333333334,
+            "max": 10.933333333333334,
+            "median": 10.933333333333334,
+            "values": [
+              10.833333333333334,
+              10.933333333333334,
+              10.933333333333334
+            ],
+            "classifications": {
+              "observed": 3,
+              "not-observed": 0
+            },
+            "onTarget": 3,
+            "onTargetShare": 1,
+            "pass": true
+          },
+          "specialistProduction": {
+            "samples": 3,
+            "observed": 3,
+            "missing": 0,
+            "mean": 27.415165874011127,
+            "min": 25.810628434622245,
+            "max": 29.883995641684475,
+            "median": 26.550873545726667,
+            "values": [
+              25.810628434622245,
+              26.550873545726667,
+              29.883995641684475
+            ],
+            "classifications": {
+              "observed": 3,
+              "not-observed": 0
+            },
+            "onTarget": 3,
+            "onTargetShare": 1,
+            "pass": true
+          },
+          "programmeCounterplay": {
+            "samples": 3,
+            "observed": 2,
+            "missing": 1,
+            "mean": 2,
+            "min": 2,
+            "max": 2,
+            "median": 2,
+            "values": [
+              2,
+              2
+            ],
+            "classifications": {
+              "observed": 2,
+              "not-observed": 1
+            },
+            "onTarget": 2,
+            "onTargetShare": 0.6666666666666666,
+            "pass": true
+          }
+        },
+        "victories": {
+          "timed": 3
+        },
+        "victoryDistribution": {
+          "timed": 1
+        },
+        "dominanceShare": 0,
+        "victoryPass": true,
+        "pass": true
+      },
+      "40": {
+        "balanceVersion": "0.2",
+        "matches": 3,
+        "submitted": 3,
+        "minimumSamples": 3,
+        "targets": {
+          "opening": {
+            "samples": 3,
+            "observed": 3,
+            "missing": 0,
+            "mean": 0,
+            "min": 0,
+            "max": 0,
+            "median": 0,
+            "values": [
+              0,
+              0,
+              0
+            ],
+            "classifications": {
+              "observed": 3,
+              "not-observed": 0
+            },
+            "onTarget": 3,
+            "onTargetShare": 1,
+            "pass": true
+          },
+          "neutralCapture": {
+            "samples": 3,
+            "observed": 3,
+            "missing": 0,
+            "mean": 417.1666666666667,
+            "min": 396,
+            "max": 434.5,
+            "median": 421,
+            "values": [
+              396,
+              421,
+              434.5
+            ],
+            "classifications": {
+              "observed": 3,
+              "not-observed": 0
+            },
+            "onTarget": 3,
+            "onTargetShare": 1,
+            "pass": true
+          },
+          "firstResearch": {
+            "samples": 3,
+            "observed": 3,
+            "missing": 0,
+            "mean": 403.5833333333333,
+            "min": 393.5,
+            "max": 420.5,
+            "median": 396.75,
+            "values": [
+              393.5,
+              396.75,
+              420.5
+            ],
+            "classifications": {
+              "observed": 3,
+              "not-observed": 0
+            },
+            "onTarget": 2,
+            "onTargetShare": 0.6666666666666666,
+            "pass": true
+          },
+          "firstContest": {
+            "samples": 3,
+            "observed": 2,
+            "missing": 1,
+            "mean": 436.625,
+            "min": 396.75,
+            "max": 476.5,
+            "median": 396.75,
+            "values": [
+              396.75,
+              476.5
+            ],
+            "classifications": {
+              "observed": 2,
+              "not-observed": 1
+            },
+            "onTarget": 2,
+            "onTargetShare": 0.6666666666666666,
+            "pass": true
+          },
+          "ordinaryContest": {
+            "samples": 3,
+            "observed": 3,
+            "missing": 0,
+            "mean": 4.148611111111111,
+            "min": 1.05,
+            "max": 7.833333333333333,
+            "median": 3.5625,
+            "values": [
+              1.05,
+              3.5625,
+              7.833333333333333
+            ],
+            "classifications": {
+              "observed": 3,
+              "not-observed": 0
+            },
+            "onTarget": 3,
+            "onTargetShare": 1,
+            "pass": true
+          },
+          "advancedProduct": {
+            "samples": 3,
+            "observed": 2,
+            "missing": 1,
+            "mean": 415,
+            "min": 415,
+            "max": 415,
+            "median": 415,
+            "values": [
+              415,
+              415
+            ],
+            "classifications": {
+              "observed": 2,
+              "not-observed": 1
+            },
+            "onTarget": 2,
+            "onTargetShare": 0.6666666666666666,
+            "pass": true
+          },
+          "completedResearch": {
+            "samples": 3,
+            "observed": 3,
+            "missing": 0,
+            "mean": 10.908333333333333,
+            "min": 10.875,
+            "max": 10.925,
+            "median": 10.925,
+            "values": [
+              10.875,
+              10.925,
+              10.925
+            ],
+            "classifications": {
+              "observed": 3,
+              "not-observed": 0
+            },
+            "onTarget": 3,
+            "onTargetShare": 1,
+            "pass": true
+          },
+          "specialistProduction": {
+            "samples": 3,
+            "observed": 3,
+            "missing": 0,
+            "mean": 26.25588727764993,
+            "min": 24.466428844853326,
+            "max": 27.307217753833,
+            "median": 26.994015234263465,
+            "values": [
+              24.466428844853326,
+              26.994015234263465,
+              27.307217753833
+            ],
+            "classifications": {
+              "observed": 3,
+              "not-observed": 0
+            },
+            "onTarget": 3,
+            "onTargetShare": 1,
+            "pass": true
+          },
+          "programmeCounterplay": {
+            "samples": 3,
+            "observed": 2,
+            "missing": 1,
+            "mean": 1,
+            "min": 1,
+            "max": 1,
+            "median": 1,
+            "values": [
+              1,
+              1
+            ],
+            "classifications": {
+              "observed": 2,
+              "not-observed": 1
+            },
+            "onTarget": 2,
+            "onTargetShare": 0.6666666666666666,
+            "pass": true
+          }
+        },
+        "victories": {
+          "timed": 3
+        },
+        "victoryDistribution": {
+          "timed": 1
+        },
+        "dominanceShare": 0,
+        "victoryPass": true,
+        "pass": true
+      }
+    },
+    "verified": true,
+    "pass": true
+  },
+  "deviationReview": {
+    "source": "GAMEPLAY_SPEC.md",
+    "valid": true,
+    "none": true,
+    "acceptedCount": 0,
+    "failures": []
+  },
+  "failures": [],
+  "ready": true
+}

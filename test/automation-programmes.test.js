@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { Game } from '../server/game.js';
 
 const inventory=(medicine=0,radiotherapy=0,targeted=0,immunotherapy=0,vaccine=0)=>({medicine,radiotherapy,targeted,immunotherapy,vaccine});
-const makeGame=()=>{let id=0;return new Game({random:()=>.2,id:()=>`m5-${++id}`});};
+const makeGame=()=>{let id=0;return new Game({random:()=>.2,id:()=>`automation-${++id}`});};
 const company=(game,name='Bot')=>{const player=game.addPlayer(name,{bot:true});game.start(player,0);return player;};
 
 test('continuity programmes report pending, finite protection, depletion, expiry, and loss cancellation',()=>{
