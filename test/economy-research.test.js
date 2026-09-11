@@ -32,6 +32,19 @@ test('R05 locks an explicit or deterministic fallback indication on first paid p
   const fallback=makeGame(),other=fallback.addPlayer();fallback.start(other,0);other.specialty='solid';other.completed.push('R03','R04');other.researchQueue=['R05'];other.allocation={research:100,manufacturing:0,infrastructure:0};fallback.regions[1].profile='blood';fallback.tick(.25);assert.equal(other.r05Choice,'blood');
 });
 
+test('R05 breaks a nonzero adjacent profile tie by whole-map frequency and locks the choice', () => {
+  const game=makeGame(),player=game.addPlayer();game.start(player,0);player.specialty='solid';player.completed.push('R03','R04');player.researchQueue=['R05'];player.allocation={research:100,manufacturing:0,infrastructure:0};
+  for(const region of game.regions){region.profile='mixed';region.neighbours=[];}game.regions[0].profile='solid';game.regions[1].profile='blood';game.regions[1].neighbours=[0];game.regions[2].profile='rare';game.regions[2].neighbours=[0];game.regions[3].profile='rare';
+  assert.equal(player.r05Choice,null);game.tick(.25);assert.ok(player.researchProgress.R05>0);assert.equal(player.r05Choice,'rare');
+  game.regions[2].neighbours=[];for(let id=2;id<game.regions.length;id++)game.regions[id].profile='blood';game.tick(.25);assert.equal(player.r05Choice,'rare');
+});
+
+test('R05 resolves complete adjacent and whole-map ties by profile order', () => {
+  const game=makeGame(),player=game.addPlayer();game.start(player,0);player.specialty='solid';player.completed.push('R03','R04');player.researchQueue=['R05'];player.allocation={research:100,manufacturing:0,infrastructure:0};
+  for(const region of game.regions){region.profile='solid';region.neighbours=[];}for(const [id,profile] of [[1,'blood'],[2,'rare'],[3,'mixed'],[4,'blood'],[5,'rare'],[6,'mixed']]){game.regions[id].profile=profile;if(id<=3)game.regions[id].neighbours=[0];}
+  game.tick(.25);assert.ok(player.researchProgress.R05>0);assert.equal(player.r05Choice,'blood');
+});
+
 test('research and infrastructure feedback exposes schedules and staged completion', () => {
   const game=makeGame(),player=game.addPlayer();game.start(player,0);player.developmentPin=0;game.tick(.25);assert.equal(player.researchActive,'R02');assert.ok(player.researchSpend>0);assert.ok(player.researchEta>0);assert.equal(player.infrastructureActive,0);assert.equal(player.infrastructureReason,'development pin');assert.ok(player.infrastructureEta>0);game.regions[0].upgradeProgress=140;assert.equal(game.regions[0].level,1);game.applyCompletions();assert.equal(game.regions[0].level,2);
 });
