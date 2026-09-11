@@ -9,7 +9,7 @@
     <div class="logo">onco<span>.io</span></div><p>Lead an oncology company. Build a treatment portfolio. Control the hospital network.</p>
     <input id="name" maxlength="18" placeholder="Company name" aria-label="Company name" required><button>Join match</button>
   </form></div>
-  <header><div class="logo small">onco<span>.io</span></div><div class="tag">HOSPITAL NETWORK CONTROL</div><div id="clock">12:00</div><div id="connection">Connecting…</div></header>
+  <header><div class="logo small">onco<span>.io</span></div><div class="tag">HOSPITAL NETWORK CONTROL</div><div id="phase" aria-live="polite">Waiting</div><div id="clock">12:00</div><div id="connection">Connecting…</div></header>
   <main>
     <aside class="panel controls">
       <h2>Budget allocation</h2><div id="allocations"></div>
@@ -18,7 +18,7 @@
       <div class="shortcuts"><button data-commit="25">25%</button><button data-commit="50">50%</button><button data-commit="75">75%</button></div>
       <div id="company"></div>
     </aside>
-    <section class="map-wrap"><canvas id="map" width="1120" height="700"></canvas><div id="instruction">Click an unclaimed region to establish your foothold.</div><div class="profile-key"><i class="solid"></i> Solid <i class="blood"></i> Blood <i class="rare"></i> Rare <i class="mixed"></i> Mixed</div></section>
+    <section class="map-wrap"><canvas id="map" width="1120" height="700"></canvas><div id="instruction" aria-live="polite">Waiting for lobby state…</div><div id="notice" role="status" aria-live="polite"></div><div class="profile-key"><i class="solid"></i> Solid <i class="blood"></i> Blood <i class="rare"></i> Rare <i class="mixed"></i> Mixed</div></section>
     <aside class="panel"><h2>Network leaders</h2><ol id="leaders"></ol><h2>Region intelligence</h2><div id="intel">Select a region.</div><h2>Research programme</h2><div id="research"></div><div id="victory">Hold 60% continuously for 60 seconds, be last standing, or lead at 12:00.</div></aside>
   </main>
   <script type="module" src="/client.js"></script>

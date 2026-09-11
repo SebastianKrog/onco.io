@@ -17,7 +17,7 @@ npm install
 npm start
 ```
 
-Open <http://localhost:3000> in multiple browser tabs. Set `PORT` to use another port.
+Open <http://localhost:3000> in multiple browser tabs. Set `PORT` to use another port and `LOBBY_SIZE` to `20`, `30`, or `40` (the default is `20`). The first connection opens the 20-second placement phase; unfilled companies become bots when it expires. A browser-held reconnect credential restores the same company, while connections arriving after play begins spectate.
 
 ## Test
 

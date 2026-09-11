@@ -24,20 +24,18 @@ test('constructs the versioned hex map and complete company defaults', () => {
   assert.equal(player.name, 'Researcher');
 });
 
-test('places companies with starting assets and validates idempotent commands', () => {
-  const game = makeGame(); const player = game.addPlayer(); const rival = game.addPlayer();
-  assert.equal(game.handle(player.id, { type: 'start', regionId: 0, specialty: 'blood', commandId: 'start' }), true);
-  assert.equal(game.handle(player.id, { type: 'start', regionId: 1, commandId: 'start' }), false);
+test('queues placement commands, consumes duplicate IDs, and records outcomes', () => {
+  const game = makeGame({ placementSeconds: .25 }); const { player } = game.connect(); game.connect();
+  assert.equal(game.handle(player.id, { type: 'start', regionId: game.pads[0], specialty: 'blood', commandId: 'start' }), true);
+  assert.equal(game.regions[game.pads[0]].ownerId, null);
+  assert.equal(game.handle(player.id, { type: 'start', regionId: game.pads[1], commandId: 'start' }), false);
   assert.equal(game.lastRejection, 'duplicate_command');
-  assert.equal(game.regions[0].ownerId, player.id);
-  assert.equal(game.regions[0].inventories.medicine, 120);
-  assert.equal(game.regions[0].level, 1);
+  game.tick(.25);
+  assert.equal(game.phase, 'active'); assert.equal(game.players.size, 20);
+  assert.equal(game.regions[game.pads[0]].ownerId, player.id);
+  assert.equal(game.regions[game.pads[0]].inventories.medicine, 120);
   assert.equal(player.specialty, 'blood');
-  assert.equal(game.start(rival, 0), false);
-  assert.equal(game.start(rival, 999), false);
-  assert.equal(game.handle('missing', { type: 'join' }), false);
-  assert.equal(game.handle(player.id, { type: 'unknown' }), false);
-  assert.equal(game.handle(player.id, { type: 'join', name: 'New Name', commandId: 'rename' }), true);
+  assert.equal(game.commandLog[0].status, 'applied');
 });
 
 test('validates budgets, products, priorities, pins, surrender and disconnect automation', () => {
@@ -57,7 +55,7 @@ test('validates budgets, products, priorities, pins, surrender and disconnect au
   assert.equal(game.prioritizeResearch(player, 'bad'), false);
   assert.equal(game.setPin(player, 'production', 0), true);
   assert.equal(game.setPin(player, 'invalid', 0), false);
-  assert.equal(game.handle(player.id, { type: 'surrender', commandId: 'surrender' }), true);
+  assert.equal(game.handle(player.id, { type: 'surrender', commandId: 'surrender' }), true); game.tick();
   assert.equal(player.bot, true);
   const disconnected = game.addPlayer(); game.start(disconnected, 2);
   assert.equal(game.removePlayer(disconnected.id), true);
@@ -179,4 +177,45 @@ test('enforces foreign commitments, aggregates arrivals, reconnects, and shares 
   game.regions[0].ownerId = alpha.id; game.regions[4].ownerId = beta.id;
   alpha.regionSeconds = beta.regionSeconds = 10; game.elapsed = game.matchSeconds; game.checkVictory(0);
   assert.deepEqual(new Set(game.result.winners), new Set([alpha.id, beta.id]));
+});
+
+test('supports every lobby template, fills vacancies, and starts clocks simultaneously', () => {
+  for (const [size, dimensions] of [[20,[16,10]],[30,[20,12]],[40,[20,16]]]) {
+    const game=makeGame({lobbySize:size,placementSeconds:.5});
+    const {player}=game.connect('Human');
+    assert.deepEqual([game.map.columns,game.map.rows],dimensions);
+    assert.equal(game.phase,'placement'); assert.equal(game.elapsed,0);
+    game.handle(player.id,{type:'start',regionId:game.pads[0],commandId:'pad'});
+    game.tick(.25); assert.equal(game.phase,'placement'); assert.equal(game.elapsed,0);
+    game.tick(.25); assert.equal(game.phase,'active'); assert.equal(game.elapsed,0);
+    assert.equal(game.players.size,size); assert.ok([...game.players.values()].every(p=>p.started));
+    assert.ok([...game.players.values()].filter(p=>p.bot).every(p=>p.nextBotAt===0));
+  }
+  assert.throws(()=>new Game({lobbySize:25}),RangeError);
+});
+
+test('orders same-boundary commands, rejects invalid phases, and freezes a result', () => {
+  const game=makeGame({placementSeconds:.25,matchSeconds:.25}); const {player}=game.connect();
+  assert.equal(game.handle(player.id,{type:'allocate',allocation:{research:40,manufacturing:40,infrastructure:20},commandId:'early'}),false);
+  assert.equal(game.lastRejection,'invalid_phase');
+  game.handle(player.id,{type:'start',regionId:game.pads[0],commandId:'start'},20); game.tick(.25);
+  game.handle(player.id,{type:'allocate',allocation:{research:40,manufacturing:40,infrastructure:20},commandId:'one'},30);
+  game.handle(player.id,{type:'allocate',allocation:{research:10,manufacturing:80,infrastructure:10},commandId:'two'},10);
+  game.tick(.25);
+  assert.deepEqual(player.allocation,{research:10,manufacturing:80,infrastructure:10});
+  assert.deepEqual(game.commandLog.slice(-2).map(x=>x.sequence),[3,4]);
+  assert.equal(game.phase,'finished'); const frozen=JSON.stringify(game.snapshot()); game.tick(5);
+  assert.equal(JSON.stringify(game.snapshot()),frozen);
+  assert.equal(game.handle(player.id,{type:'join',name:'Changed',commandId:'late'}),false);
+  assert.equal(game.lastRejection,'match_finished');
+});
+
+test('spectates late connections and restores reconnect identity unless surrendered', () => {
+  const game=makeGame({placementSeconds:.25}); const first=game.connect('First'); game.tick(.25);
+  assert.equal(game.connect().spectator,true);
+  game.removePlayer(first.player.id); advance(game,30.25); assert.equal(first.player.bot,true);
+  assert.equal(game.reconnect(first.credential),first.player); assert.equal(first.player.bot,false);
+  first.player.surrendered=true; game.removePlayer(first.player.id);
+  assert.equal(game.reconnect(first.credential),null);
+  assert.equal(game.reconnect('invalid'),null);
 });

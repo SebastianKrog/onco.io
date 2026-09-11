@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 
 export const STEP = 0.25;
 export const MAP = { columns: 16, rows: 10 };
+export const LOBBY_SIZES = Object.freeze({ 20: { columns: 16, rows: 10 }, 30: { columns: 20, rows: 12 }, 40: { columns: 20, rows: 16 } });
+export const PHASES = Object.freeze({ WAITING: 'waiting', PLACEMENT: 'placement', ACTIVE: 'active', FINISHED: 'finished' });
 export const PROFILES = ['solid', 'blood', 'rare', 'mixed'];
 export const BALANCE_VERSION = '0.2';
 export const TREATMENTS = {
@@ -43,21 +45,33 @@ export function treatmentForce(player, key, profile, defending = false) {
 }
 
 export class Game {
-  constructor({ random = Math.random, id = randomUUID, matchSeconds = 720, columns = 16, rows = 10 } = {}) {
-    this.random=random; this.id=id; this.matchSeconds=matchSeconds; this.elapsed=0; this.accumulator=0; this.players=new Map();
-    this.convoys=[]; this.commands=[]; this.commandIds=new Set(); this.sequence=0; this.winner=null; this.result=null; this.holdLeader=null; this.holdSeconds=0;
-    this.map={ columns, rows }; this.regions=Array.from({length:columns*rows},(_,id)=>({ id, name:`Region ${id+1}`, column:id%columns,row:Math.floor(id/columns), neighbours:neighbours(id,columns,rows), profile:PROFILES[id%4], ownerId:null, level:0, upgradeProgress:0, inventories:emptyInventory(), protection:30, quietTime:0, acquiredAt:null, commissionedUntil:0, dispatchAvailableAt:0, programme:null, developmentPin:false, productionPin:false, campaigns:{} }));
+  constructor({ random = Math.random, id = randomUUID, matchSeconds = 720, lobbySize = 20, placementSeconds = 20, columns, rows, now = () => Date.now() } = {}) {
+    if (!LOBBY_SIZES[lobbySize] && (columns == null || rows == null)) throw new RangeError('lobbySize must be 20, 30, or 40');
+    const template = columns != null && rows != null ? { columns, rows } : LOBBY_SIZES[lobbySize];
+    this.random=random; this.id=id; this.now=now; this.matchSeconds=matchSeconds; this.lobbySize=lobbySize; this.placementSeconds=placementSeconds; this.elapsed=0; this.lobbyElapsed=0; this.accumulator=0; this.players=new Map();
+    this.phase=PHASES.WAITING; this.placementRemaining=placementSeconds; this.startedAt=null; this.finishedAt=null;
+    this.convoys=[]; this.commands=[]; this.commandLog=[]; this.commandIds=new Set(); this.sequence=0; this.winner=null; this.result=null; this.holdLeader=null; this.holdSeconds=0;
+    this.map={ ...template }; this.regions=Array.from({length:template.columns*template.rows},(_,id)=>({ id, name:`Region ${id+1}`, column:id%template.columns,row:Math.floor(id/template.columns), neighbours:neighbours(id,template.columns,template.rows), profile:PROFILES[id%4], ownerId:null, level:0, upgradeProgress:0, inventories:emptyInventory(), protection:30, quietTime:0, acquiredAt:null, commissionedUntil:0, dispatchAvailableAt:0, programme:null, developmentPin:false, productionPin:false, campaigns:{} }));
+    this.pads=Array.from({length:lobbySize},(_,index)=>Math.floor(index*this.regions.length/lobbySize));
     this.contests=new Map();
   }
 
-  addPlayer(name='Researcher') {
+  addPlayer(name='Researcher', { bot = false, credential } = {}) {
+    if (this.players.size >= this.lobbySize) return null;
+    const playerId=this.id(); credential??=this.id();
     const inventory=emptyInventory(); inventory.medicine=0;
-    const p={ id:this.id(),name:cleanName(name),color:`hsl(${Math.floor(this.random()*360)} 70% 58%)`,initials:'',started:false,eliminated:false,bot:false,surrendered:false,specialty:null,focus:null,
+    const p={ id:playerId,name:cleanName(name),color:`hsl(${Math.floor(this.random()*360)} 70% 58%)`,initials:'',started:false,eliminated:false,bot:false,surrendered:false,specialty:null,focus:null,
       allocation:{research:20,manufacturing:65,infrastructure:15},pendingAllocation:null,researchBank:0,infrastructureBank:0,revenue:0,gross:0,upkeep:0,net:0,research:0,researchQueue:[...DEFAULT_RESEARCH],researchProgress:{},completed:[],priorityAvailableAt:0,targetedIndications:[],selectedTreatment:'medicine',manufacturingAvailableAt:0,
       stock:inventory,unlocked:['medicine'],commitment:50,filter:'all',production:0,unusedManufacturing:0,overflow:0,regionSeconds:0,productionPin:null,developmentPin:null,
-      connected:true,disconnectedAt:null,nextBotAt:0,researchSpend:0,infrastructureSpend:0,manufacturingSpend:0 };
+      connected:!bot,disconnectedAt:null,nextBotAt:0,researchSpend:0,infrastructureSpend:0,manufacturingSpend:0,credential,spectator:false };
+    p.bot=bot;
     p.initials=p.name.split(/\s+/).map(x=>x[0]).join('').slice(0,2).toUpperCase(); this.players.set(p.id,p); return p;
   }
+  connect(name='Researcher') {
+    if (this.phase===PHASES.ACTIVE||this.phase===PHASES.FINISHED||this.players.size>=this.lobbySize) return { spectator:true, player:null, credential:null };
+    const player=this.addPlayer(name); if(this.phase===PHASES.WAITING){this.phase=PHASES.PLACEMENT;this.placementRemaining=this.placementSeconds;} return { spectator:false,player,credential:player.credential };
+  }
+  reconnect(credential){const p=[...this.players.values()].find(x=>x.credential===credential);if(!p||!this.reconnectPlayer(p.id))return null;return p;}
   removePlayer(id) { const p=this.players.get(id); if (!p) return false; p.connected=false;p.disconnectedAt=this.elapsed;return true; }
   reconnectPlayer(id) { const p=this.players.get(id);if(!p||p.surrendered)return false;p.connected=true;p.disconnectedAt=null;p.bot=false;return true; }
   renamePlayer(p,name){p.name=cleanName(name);p.initials=p.name.slice(0,2).toUpperCase();return true;}
@@ -65,15 +79,22 @@ export class Game {
   owned(p){return this.regions.filter(r=>r.ownerId===p.id);}
   unlocks(p){return ['medicine',...(p.completed.includes('R06')?['radiotherapy']:[]),...(p.completed.includes('R04')?['targeted']:[]),...(p.completed.includes('R08')?['immunotherapy']:[]),...(p.completed.includes('R09')?['vaccine']:[])];}
 
-  handle(id,message){ const p=this.players.get(id); if(!p||!message||typeof message!=='object'||this.winner)return this.reject('invalid_command');
+  handle(id,message,receivedAt=this.now()){ const p=this.players.get(id); if(!p||!message||typeof message!=='object')return this.reject('invalid_command');
     if(typeof message.commandId!=='string'||!message.commandId.trim())return this.reject('missing_command_id');
-    if(this.commandIds.has(`${id}:${message.commandId}`))return this.reject('duplicate_command');this.commandIds.add(`${id}:${message.commandId}`);
-    if((p.eliminated||p.bot)&&!['join'].includes(message.type))return this.reject('not_human_controlled');
+    if(this.commandIds.has(`${id}:${message.commandId}`))return this.rejectLogged(id,message,receivedAt,'duplicate_command');this.commandIds.add(`${id}:${message.commandId}`);
+    if(this.phase===PHASES.FINISHED)return this.rejectLogged(id,message,receivedAt,'match_finished');
     const actions={join:()=>this.renamePlayer(p,message.name),start:()=>this.start(p,message.regionId,message.specialty),allocate:()=>this.allocate(p,message.allocation),selectTreatment:()=>this.selectTreatment(p,message.treatment),contest:()=>this.dispatch(p,message.fromId,message.toId,message.commitment,message.filter),dispatch:()=>this.dispatch(p,message.fromId,message.toId,message.commitment,message.filter),withdraw:()=>this.withdraw(p,message.regionId,message.toId),research:()=>this.prioritizeResearch(p,message.project),programme:()=>this.activateProgramme(p,message.regionId),pin:()=>this.setPin(p,message.kind,message.regionId),surrender:()=>{p.surrendered=true;p.bot=true;return true;}};
-    return actions[message.type]?.() ?? false;
+    const placement=message.type==='start', lobby=message.type==='join';
+    if(placement&&this.phase!==PHASES.PLACEMENT)return this.rejectLogged(id,message,receivedAt,'invalid_phase');
+    if(!placement&&!lobby&&this.phase!==PHASES.ACTIVE)return this.rejectLogged(id,message,receivedAt,'invalid_phase');
+    if((p.eliminated||p.bot)&&!lobby)return this.rejectLogged(id,message,receivedAt,'not_human_controlled');
+    if(lobby)return actions.join();
+    const envelope={companyId:id,commandId:message.commandId,receivedAt,sequence:++this.sequence,message:{...message},status:'accepted'};
+    this.commands.push(envelope);this.commandLog.push(envelope);return true;
   }
   reject(reason){this.lastRejection=reason;return false;}
-  start(p,id,specialty){const r=this.regions[Number(id)];if(p.started||!r||r.ownerId!==null)return this.reject('invalid_start');r.ownerId=p.id;r.level=1;r.protection=35;r.inventories.medicine=120;r.acquiredAt=this.elapsed;p.started=true;p.specialty=PROFILES.includes(specialty)?specialty:r.profile;p.focus=p.specialty;return true;}
+  rejectLogged(companyId,message,receivedAt,reason){this.lastRejection=reason;this.commandLog.push({companyId,commandId:message.commandId,receivedAt,sequence:++this.sequence,type:message.type,status:'rejected',reason,processedAt:this.phase===PHASES.ACTIVE?this.elapsed:this.lobbyElapsed});return false;}
+  start(p,id,specialty,requirePad=false){const r=this.regions[Number(id)];if(p.started||!r||r.ownerId!==null||(requirePad&&!this.pads.includes(r.id)))return this.reject('invalid_start');r.ownerId=p.id;r.level=1;r.protection=35;r.inventories.medicine=120;r.acquiredAt=this.elapsed;p.started=true;p.specialty=PROFILES.includes(specialty)?specialty:r.profile;p.focus=p.specialty;if(!requirePad&&this.phase===PHASES.WAITING){this.phase=PHASES.ACTIVE;this.startedAt=this.now();}return true;}
   allocate(p,a){if(!a||Object.keys(a).length!==3||!['research','manufacturing','infrastructure'].every(k=>finite(a[k])&&Number(a[k])%5===0&&Number(a[k])>=0))return this.reject('invalid_budget');const values=Object.values(a).map(Number);if(values.reduce((x,y)=>x+y,0)!==100)return this.reject('invalid_budget_total');p.pendingAllocation={research:+a.research,manufacturing:+a.manufacturing,infrastructure:+a.infrastructure};return true;}
   selectTreatment(p,key){if(!this.unlocks(p).includes(key)||this.elapsed<p.manufacturingAvailableAt)return this.reject('locked_treatment');if(p.selectedTreatment!==key)p.manufacturingAvailableAt=this.elapsed+5;p.selectedTreatment=key;return true;}
   path(from,to,owner){const queue=[[from]],seen=new Set([from]);while(queue.length){const path=queue.shift(),last=path.at(-1);if(last===to)return path;for(const n of this.regions[last].neighbours)if(!seen.has(n)&&(n===to||this.regions[n].ownerId===owner)){seen.add(n);queue.push([...path,n]);}}return null;}
@@ -91,8 +112,10 @@ export class Game {
   activateProgramme(p,id){const r=this.regions[Number(id)];if(!p.completed.includes('R09')||r?.ownerId!==p.id||r.programme||r.inventories.vaccine<10)return this.reject('invalid_programme');r.inventories.vaccine-=10;r.programme={pending:true,companyId:p.id,completesAt:this.elapsed+8,expiresAt:null,protection:0};return true;}
   setPin(p,kind,id){const r=this.regions[Number(id)];if(r?.ownerId!==p.id||!['production','development'].includes(kind))return false;p[`${kind}Pin`]=r.id;return true;}
 
-  tick(seconds=STEP){if(this.winner)return;this.accumulator+=clamp(Number(seconds)||0,0,5);while(this.accumulator+1e-9>=STEP&&!this.winner){this.step();this.accumulator-=STEP;}}
-  step(){const start=this.elapsed,end=Math.min(this.matchSeconds,start+STEP),dt=end-start;if(dt<=0){this.checkVictory(0);return;}for(const p of this.players.values()){if(!p.connected&&!p.surrendered&&p.disconnectedAt!=null&&start-p.disconnectedAt>=30)p.bot=true;if(p.pendingAllocation){p.allocation=p.pendingAllocation;p.pendingAllocation=null;}}this.deliver(end);this.expireProgrammes(end);for(const p of this.players.values())if(p.started&&!p.eliminated)this.economy(p,dt,start,end);this.regenerate(dt);this.resolveContests(dt,end);this.elapsed=end;this.applyCompletions();this.clearInvalidPins();this.eliminate();this.runBots();this.checkVictory(dt);}
+  tick(seconds=STEP){if(this.phase===PHASES.FINISHED)return;this.accumulator+=clamp(Number(seconds)||0,0,5);while(this.accumulator+1e-9>=STEP&&this.phase!==PHASES.FINISHED){this.step();this.accumulator-=STEP;}}
+  processCommands(){const queued=this.commands.splice(0).sort((a,b)=>a.sequence-b.sequence);for(const envelope of queued){const p=this.players.get(envelope.companyId),m=envelope.message;let ok=false;if(!p) this.lastRejection='unknown_company';else if(m.type==='start')ok=this.phase===PHASES.PLACEMENT&&this.start(p,m.regionId,m.specialty,true);else if(this.phase!==PHASES.ACTIVE)this.lastRejection='invalid_phase';else if(p.eliminated||p.bot)this.lastRejection='not_human_controlled';else {const actions={allocate:()=>this.allocate(p,m.allocation),selectTreatment:()=>this.selectTreatment(p,m.treatment),contest:()=>this.dispatch(p,m.fromId,m.toId,m.commitment,m.filter),dispatch:()=>this.dispatch(p,m.fromId,m.toId,m.commitment,m.filter),withdraw:()=>this.withdraw(p,m.regionId,m.toId),research:()=>this.prioritizeResearch(p,m.project),programme:()=>this.activateProgramme(p,m.regionId),pin:()=>this.setPin(p,m.kind,m.regionId),surrender:()=>{p.surrendered=true;p.bot=true;return true;}};ok=actions[m.type]?.()??this.reject('unknown_command');}envelope.status=ok?'applied':'rejected';envelope.processedAt=this.phase===PHASES.ACTIVE?this.elapsed:this.lobbyElapsed;envelope.reason=ok?null:this.lastRejection;}}
+  beginMatch(){const vacant=this.lobbySize-this.players.size;for(let i=0;i<vacant;i++)this.addPlayer(`Automated ${String(i+1).padStart(2,'0')}`,{bot:true});const freePads=this.pads.filter(id=>this.regions[id].ownerId===null);const unplaced=[...this.players.values()].filter(p=>!p.started).sort((a,b)=>a.id.localeCompare(b.id));unplaced.forEach((p,index)=>this.start(p,freePads[index]));this.phase=PHASES.ACTIVE;this.elapsed=0;this.startedAt=this.now();for(const p of this.players.values())p.nextBotAt=0;}
+  step(){this.processCommands();if(this.phase===PHASES.WAITING)return;if(this.phase===PHASES.PLACEMENT){this.lobbyElapsed+=STEP;this.placementRemaining=Math.max(0,this.placementSeconds-this.lobbyElapsed);if(this.placementRemaining<=0||this.players.size===this.lobbySize)this.beginMatch();return;}const start=this.elapsed,end=Math.min(this.matchSeconds,start+STEP),dt=end-start;if(dt<=0){this.checkVictory(0);return;}for(const p of this.players.values()){if(!p.connected&&!p.surrendered&&p.disconnectedAt!=null&&start-p.disconnectedAt>=30)p.bot=true;if(p.pendingAllocation){p.allocation=p.pendingAllocation;p.pendingAllocation=null;}}this.deliver(end);this.expireProgrammes(end);for(const p of this.players.values())if(p.started&&!p.eliminated)this.economy(p,dt,start,end);this.regenerate(dt);this.resolveContests(dt,end);this.elapsed=end;this.applyCompletions();this.clearInvalidPins();this.eliminate();this.runBots();this.checkVictory(dt);}
   economy(p,dt,start,end){const owned=this.owned(p);p.regionSeconds+=owned.length*dt;let gross=8;let operating=0;for(const r of owned){let mult=1;if(r.acquiredAt!=null&&r.acquiredAt>0){const commissioned=Math.max(0,Math.min(end,r.acquiredAt+10)-start);mult=1-.5*commissioned/dt;}gross+=mult*(3+.4*r.level);operating+=1+.1*r.level;}const d=Math.max(0,owned.length-8),admin=(p.completed.includes('R12')?.85:1)*1.5*owned.length*d/(d+20);p.gross=gross;p.upkeep=operating+admin;p.net=Math.max(0,gross-p.upkeep);p.revenue+=p.net*dt;
     const alloc=p.allocation,rf=p.net*dt*alloc.research/100,ipf=p.net*dt*alloc.infrastructure/100,mf=p.net*dt*alloc.manufacturing/100;let manufacturing=mf;const beforeResearch=p.research;manufacturing+=this.fundResearch(p,rf,dt);p.researchSpend=(p.research-beforeResearch)/dt;const beforeInfrastructure=this.totalUpgradeProgress(p);manufacturing+=this.fundInfrastructure(p,ipf,dt);p.infrastructureSpend=(this.totalUpgradeProgress(p)-beforeInfrastructure)/dt;this.manufacture(p,manufacturing,dt,owned);}
   totalUpgradeProgress(p){return this.owned(p).reduce((sum,r)=>sum+r.upgradeProgress,0);}
@@ -119,6 +142,6 @@ export class Game {
   eliminate(){for(const p of this.players.values())if(p.started&&!p.eliminated&&!this.regions.some(r=>r.ownerId===p.id)){p.eliminated=true;this.convoys=this.convoys.filter(c=>c.companyId!==p.id);for(const r of this.regions)delete r.campaigns[p.id];}}
   runBots(){for(const p of this.players.values()){if(!p.bot||p.eliminated||!p.started||this.elapsed+1e-9<p.nextBotAt)continue;p.nextBotAt=this.elapsed+2;p.allocation={research:20,manufacturing:65,infrastructure:15};const borders=this.owned(p).filter(r=>r.neighbours.some(n=>this.regions[n].ownerId!==p.id)).sort((a,b)=>a.id-b.id);for(const from of borders){const target=from.neighbours.map(id=>this.regions[id]).filter(r=>r.ownerId!==p.id).sort((a,b)=>a.id-b.id)[0];if(!target)continue;const own=this.defenderForce(from),enemy=this.defenderForce(target);const commitment=own*.5>=30?50:own*.35>=30?65:null;if(commitment&&own*commitment/100>=enemy*(target.ownerId?1.6:1.35)&&this.dispatch(p,from.id,target.id,commitment,'all'))break;}}}
   checkVictory(dt){const alive=[...this.players.values()].filter(p=>p.started&&!p.eliminated),counts=alive.map(p=>({player:p,count:this.owned(p).length})).sort((a,b)=>b.count-a.count||b.player.regionSeconds-a.player.regionSeconds||a.player.id.localeCompare(b.player.id));if(alive.length===1&&[...this.players.values()].filter(p=>p.started).length>1){this.finish([alive[0]],'last-standing');return;}const leader=counts[0],threshold=Math.ceil(.6*this.regions.length);if(leader?.count>=threshold){if(this.holdLeader===leader.player.id)this.holdSeconds+=dt;else{this.holdLeader=leader.player.id;this.holdSeconds=0;}if(this.holdSeconds>=60){this.finish([leader.player],'dominance');return;}}else{this.holdLeader=null;this.holdSeconds=0;}if(this.elapsed>=this.matchSeconds&&leader?.count>0){const winners=counts.filter(x=>x.count===leader.count&&Math.abs(x.player.regionSeconds-leader.player.regionSeconds)<1e-9).map(x=>x.player);this.finish(winners,'timed');}}
-  finish(players,type){const winners=Array.isArray(players)?players:[players];this.winner=winners[0].id;this.result={type,winners:winners.map(p=>p.id),at:this.elapsed};}
-  snapshot(){return {version:BALANCE_VERSION,map:this.map,profiles:PROFILES,treatments:TREATMENTS,research:RESEARCH,elapsed:this.elapsed,remaining:Math.max(0,this.matchSeconds-this.elapsed),winner:this.winner,result:this.result,hold:{playerId:this.holdLeader,seconds:this.holdSeconds},players:[...this.players.values()],regions:this.regions,convoys:this.convoys,contests:[...this.contests.values()],leaderboard:[...this.players.values()].map(p=>({id:p.id,name:p.name,color:p.color,regions:this.owned(p).length,regionSeconds:p.regionSeconds})).sort((a,b)=>b.regions-a.regions||b.regionSeconds-a.regionSeconds||a.name.localeCompare(b.name)).slice(0,10)};}
+  finish(players,type){const winners=Array.isArray(players)?players:[players];this.winner=winners[0].id;this.result={type,winners:winners.map(p=>p.id),at:this.elapsed};this.phase=PHASES.FINISHED;this.finishedAt=this.now();}
+  snapshot(){return {version:BALANCE_VERSION,phase:this.phase,lobbySize:this.lobbySize,placementRemaining:this.placementRemaining,pads:this.pads,map:this.map,profiles:PROFILES,treatments:TREATMENTS,research:RESEARCH,elapsed:this.elapsed,remaining:Math.max(0,this.matchSeconds-this.elapsed),winner:this.winner,result:this.result,hold:{playerId:this.holdLeader,seconds:this.holdSeconds},commandOutcomes:this.commandLog.slice(-100).map(({message,...entry})=>({...entry,type:entry.type??message?.type})),players:[...this.players.values()].map(({credential,...p})=>p),regions:this.regions,convoys:this.convoys,contests:[...this.contests.values()],leaderboard:[...this.players.values()].map(p=>({id:p.id,name:p.name,color:p.color,regions:this.owned(p).length,regionSeconds:p.regionSeconds})).sort((a,b)=>b.regions-a.regions||b.regionSeconds-a.regionSeconds||a.name.localeCompare(b.name)).slice(0,10)};}
 }
