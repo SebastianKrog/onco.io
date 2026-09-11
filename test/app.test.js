@@ -14,6 +14,17 @@ async function runningApp() {
   return { ...app, base: `http://127.0.0.1:${port}`, ws: `ws://127.0.0.1:${port}` };
 }
 
+async function connect(url) {
+  const socket = new WebSocket(url);
+  const welcome = new Promise(resolve => socket.addEventListener('message', event => resolve(JSON.parse(event.data)), { once: true }));
+  await once(socket, 'open');
+  return { socket, welcome: await welcome };
+}
+
+function advance(game, seconds) {
+  while (seconds > 0) { const step = Math.min(5, seconds); game.tick(step); seconds -= step; }
+}
+
 test('serves static files, types, and not-found responses', async t => {
   const app = await runningApp();
   t.after(() => { for (const socket of app.sockets) socket.destroy(); app.server.close(); });
@@ -68,4 +79,40 @@ test('a client transport error closes the socket without crashing the server', a
   assert.equal(socket.destroyed, true);
   assert.equal(app.sockets.size, 0);
   assert.equal(app.game.players.get('identity-1').connected, false);
+});
+
+test('a superseded company socket cannot disconnect the active reconnect', async t => {
+  const app = await runningApp();
+  t.after(() => { for (const client of app.sockets) client.destroy(); app.server.close(); });
+
+  const first = await connect(app.ws);
+  const second = await connect(`${app.ws}?credential=${encodeURIComponent(first.welcome.credential)}`);
+  assert.equal(second.welcome.id, first.welcome.id);
+  assert.equal(second.welcome.reconnected, true);
+
+  const firstClosed = once(first.socket, 'close');
+  first.socket.close();
+  await firstClosed;
+  advance(app.game, 30.25);
+
+  const player = app.game.players.get(first.welcome.id);
+  assert.equal(player.connected, true);
+  assert.equal(player.bot, false);
+
+  const spectator = await connect(app.ws);
+  assert.equal(spectator.welcome.spectator, true);
+  const spectatorClosed = once(spectator.socket, 'close');
+  spectator.socket.close();
+  await spectatorClosed;
+  assert.equal(player.connected, true);
+
+  const secondClosed = once(second.socket, 'close');
+  second.socket.close();
+  await secondClosed;
+  for (let attempt = 0; player.connected && attempt < 20; attempt += 1) await new Promise(resolve => setTimeout(resolve, 5));
+  assert.equal(player.connected, false);
+  assert.equal(player.bot, false);
+
+  advance(app.game, 30.25);
+  assert.equal(player.bot, true);
 });

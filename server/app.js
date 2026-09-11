@@ -23,6 +23,7 @@ export function createApp({ game = new Game(), tickRate = 50 } = {}) {
     } catch { response.writeHead(404).end('Not found'); }
   });
   const sockets = new Set();
+  const companySockets = new Map();
   const frame = message => {
     const payload = Buffer.from(message);
     if (payload.length < 126) return Buffer.concat([Buffer.from([0x81, payload.length]), payload]);
@@ -44,6 +45,7 @@ export function createApp({ game = new Game(), tickRate = 50 } = {}) {
     const reconnected = credential ? game.reconnect(credential) : null;
     const connection = reconnected ? { player: reconnected, credential: reconnected.credential, spectator: false } : game.connect();
     const player = connection.player;
+    if (player) companySockets.set(player.id, socket);
     send(socket, JSON.stringify({ type: 'welcome', id: player?.id ?? null, credential: connection.credential, spectator: connection.spectator, reconnected: Boolean(reconnected) }));
     let pending = Buffer.alloc(0);
     socket.on('data', chunk => {
@@ -70,7 +72,13 @@ export function createApp({ game = new Game(), tickRate = 50 } = {}) {
       }
     });
     socket.on('error', () => socket.destroy());
-    socket.on('close', () => { sockets.delete(socket); if(player)game.removePlayer(player.id); });
+    socket.on('close', () => {
+      sockets.delete(socket);
+      if (player && companySockets.get(player.id) === socket) {
+        companySockets.delete(player.id);
+        game.removePlayer(player.id);
+      }
+    });
   });
   const broadcast = () => {
     const payload = JSON.stringify({ type: 'state', ...game.snapshot() });
