@@ -69,6 +69,7 @@ export function createApp({ game = new Game(), tickRate = 50 } = {}) {
         }
       }
     });
+    socket.on('error', () => socket.destroy());
     socket.on('close', () => { sockets.delete(socket); if(player)game.removePlayer(player.id); });
   });
   const broadcast = () => {
