@@ -21,11 +21,19 @@ test('bot continuity outranks reinforcement and dispatches an exact ten VAC obje
   game.deliver(5);assert.equal(game.regions[1].inventories.vaccine,10);const next=game.runBotTactical(bot);assert.equal(next.type,'programme');assert.equal(game.regions[1].programme.pending,true);
 });
 
+test('bot programme production uses the ordinary five-second treatment switch',()=>{
+  const game=makeGame(),bot=company(game),rival=game.addPlayer('Rival'),region=game.regions[0];rival.started=true;rival.specialty='solid';bot.completed.push('R09');region.level=2;region.inventories=inventory();region.campaigns[rival.id]=inventory(10);
+  assert.equal(game.runBotTactical(bot),null);assert.equal(bot.selectedTreatment,'medicine','VAC must not be selected immediately');assert.equal(bot.pendingTreatment,'vaccine');assert.equal(bot.manufacturingAvailableAt,5);assert.equal(bot.programmeObjective,region.id);
+  game.manufacture(bot,8,.25,[region]);assert.ok(region.inventories.medicine>0,'the previous product remains active during the switch');assert.equal(region.inventories.vaccine,0);
+  game.elapsed=2;game.runBotTactical(bot);assert.equal(bot.pendingTreatment,'vaccine');assert.equal(bot.manufacturingAvailableAt,5,'the two-second evaluation must not restart the cooldown');assert.equal(bot.programmeObjective,region.id);
+  game.elapsed=5;game.tick(.25);assert.equal(bot.selectedTreatment,'vaccine');assert.equal(bot.pendingTreatment,null);assert.ok(region.inventories.vaccine>0,'VAC production begins only after the switch expires');
+});
+
 test('bot programme objective recovers from a broken route instead of remaining on vaccine production',()=>{
   const game=makeGame(),bot=company(game),rival=game.addPlayer('Rival');rival.started=true;rival.specialty='solid';bot.completed.push('R09');for(const id of [1,2,18])game.regions[id].ownerId=bot.id;game.regions[2].campaigns[rival.id]=inventory(10);game.regions[0].inventories=inventory(0,0,0,0,10);
   assert.equal(game.runBotTactical(bot).type,'programme-supply');game.regions[1].ownerId=null;game.deliver(5);assert.equal(game.convoys.length,0);assert.equal(game.routeInterruptions.length,1);
   game.regions[18].inventories=inventory(0,0,0,0,10);const replanned=game.runBotTactical(bot);assert.equal(replanned.type,'programme-supply');assert.equal(replanned.fromId,18);assert.equal(replanned.regionId,2);
-  delete game.regions[2].campaigns[rival.id];bot.selectedTreatment='vaccine';game.manageBotStrategy(bot);assert.notEqual(bot.pendingTreatment??bot.selectedTreatment,'vaccine');
+  delete game.regions[2].campaigns[rival.id];bot.selectedTreatment='vaccine';bot.programmeObjective=2;game.runBotTactical(bot);assert.equal(bot.programmeObjective,null);game.manageBotStrategy(bot);assert.equal(bot.pendingTreatment,'medicine');assert.equal(bot.selectedTreatment,'vaccine');game.elapsed=10;game.tick(.25);assert.equal(bot.selectedTreatment,'medicine');
 });
 
 test('bot reinforcement arrives within twelve seconds and retains thirty percent at source',()=>{
