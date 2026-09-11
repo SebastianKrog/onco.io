@@ -63,39 +63,39 @@ acceptance criteria.
 
 ## Milestone 3 — Economy, production, research, and infrastructure fidelity
 
-- [ ] **Implement normative budget redistribution.** Make sliders use five-point
+- [x] **Implement normative budget redistribution.** Make sliders use five-point
   steps; redistribute the remainder proportionally; round the first remaining
   slider to the nearest five with halves upward; assign the residual in Research,
   Manufacturing, Infrastructure order; and handle two zero sliders evenly.
-- [ ] **Add budget presets.** Provide Balanced 20/65/15, Expansion 10/80/10, and
+- [x] **Add budget presets.** Provide Balanced 20/65/15, Expansion 10/80/10, and
   Development 40/40/20 controls that become effective on the next simulation
   step.
-- [ ] **Enforce the manufacturing switch delay.** Keep the old product active or
+- [x] **Enforce the manufacturing switch delay.** Keep the old product active or
   pause output, as defined by the specification, until the five-second switch
   completes; prevent another switch during the cooldown; and expose the remaining
   time.
-- [ ] **Correct production accounting.** Report actual units per second after
+- [x] **Correct production accounting.** Report actual units per second after
   dividing processed credits by product cost, separately report processed
   manufacturing credits, and distinguish direct manufacturing funding from RP/IP
   overflow and unused funding.
-- [ ] **Verify weighted factory redistribution.** Ensure each redistribution pass
+- [x] **Verify weighted factory redistribution.** Ensure each redistribution pass
   respects regional processing and storage caps, border weight is three, a
   production pin triples its normal weight, and over-capacity regions neither
   manufacture nor receive.
-- [ ] **Lock the R05 indication on first spend.** Accept an explicit different
+- [x] **Lock the R05 indication on first spend.** Accept an explicit different
   profile choice, lock it when R05 first receives RP, and otherwise use adjacent
   non-owned frequency, then whole-map frequency, then the specified profile order
   for ties.
-- [ ] **Complete research scheduling feedback.** Identify the active project,
+- [x] **Complete research scheduling feedback.** Identify the active project,
   queued projects and ancestors, paid progress, spending rate, ETA, priority
   cooldown, completed effects, and the locked R05 choice.
-- [ ] **Complete infrastructure scheduling feedback.** Show the active region,
+- [x] **Complete infrastructure scheduling feedback.** Show the active region,
   saved progress, current and next level, spending rate, ETA, and why a region was
   selected; verify completion affects only the next step.
 
 ### Milestone acceptance
 
-- [ ] Automated conservation tests reconcile net credits with RP/IP spending,
+- [x] Automated conservation tests reconcile net credits with RP/IP spending,
   bank changes, processed manufacturing, overflow, and unused funding, including
   bank caps, no-project cases, factory saturation, product switches, pins, R05
   locking, pre-emption, capture, and staged completion.
