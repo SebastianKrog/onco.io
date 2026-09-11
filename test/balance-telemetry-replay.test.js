@@ -31,6 +31,31 @@ test('deterministic replay verifies every fixed-step boundary',()=>{
   record.boundaries[0].digest='corrupt';assert.equal(replayMatch(record).ok,false);
 });
 
+test('replay preserves disconnect takeover, bot actions, reconnect, and permanent surrender',()=>{
+  let id=0;const game=new Game({random:()=>.25,id:()=>`control-${++id}`,seed:'control-replay',columns:2,rows:2,matchSeconds:45});
+  const human=game.addPlayer('Alpha'),rival=game.addPlayer('Beta');game.start(human,0);game.start(rival,3);
+  const credential=human.credential;
+  assert.equal(game.removePlayer(human.id),true);
+  while(game.elapsed<31)game.tick(.25);
+  assert.equal(human.bot,true);
+  assert.ok(game.telemetry.events.some(event=>event.companyId===human.id&&event.actor.startsWith('bot-policy')&&event.type==='dispatch'),'takeover should produce a bot dispatch');
+  assert.equal(game.reconnect(credential),human);assert.equal(human.bot,false);
+  while(game.elapsed<35)game.tick(.25);
+  assert.equal(game.handle(human.id,{type:'surrender',commandId:'permanent-surrender'}),true);game.tick(.25);
+  assert.equal(game.reconnect(credential),null);
+  while(game.phase!=='finished')game.tick(.25);
+
+  const record=structuredClone(game.exportReplay());
+  assert.deepEqual(record.externalControlEvents.map(({type})=>type),['disconnect','bot-takeover','reconnect','surrender']);
+  assert.ok(record.externalControlEvents.every(event=>Number.isFinite(event.at)&&Number.isInteger(event.sequence)));
+  assert.equal(JSON.stringify(record).includes(credential),false,'replays must not disclose reconnect credentials');
+  const replay=replayMatch(record);
+  assert.equal(replay.ok,true,JSON.stringify(replay.differences));
+  assert.deepEqual(replay.game.boundarySnapshots,record.boundaries);
+  assert.deepEqual(replay.actualResult,record.result);
+  assert.equal(replay.game.players.get(human.id).surrendered,true);
+});
+
 test('client displays versioned match record and aggregate telemetry',async()=>{
   const [html,client]=await Promise.all([readFile(new URL('../public/index.html',import.meta.url),'utf8'),readFile(new URL('../public/client.js',import.meta.url),'utf8')]);
   assert.match(html,/id="match-record"/);assert.match(client,/state\.balance\?\.version/);assert.match(client,/contest-seconds/);
