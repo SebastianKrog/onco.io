@@ -16,6 +16,8 @@
       <h2>Treatment</h2><div id="treatments"></div><div id="switch-status" class="status-line"></div>
       <h2>Commit local supply</h2><label class="commit"><input id="commitment" type="range" min="10" max="100" step="5" value="50"><output id="commit-output">50%</output></label>
       <div class="shortcuts"><button data-commit="25">25%</button><button data-commit="50">50%</button><button data-commit="75">75%</button></div>
+      <label class="dispatch-filter">Supply filter<select id="dispatch-filter"><option value="all">All supply</option><option value="medicine">MED only</option><option value="radiotherapy">RAD only</option><option value="targeted">TGT only</option><option value="immunotherapy">IMM only</option><option value="vaccine">VAC only</option></select></label>
+      <div id="dispatch-status" class="dispatch-status">Select an owned source to preview an order.</div>
       <div id="company"></div>
     </aside>
     <section class="map-wrap"><canvas id="map" width="1120" height="700"></canvas><div id="instruction" aria-live="polite">Waiting for lobby state…</div><div id="notice" role="status" aria-live="polite"></div><div class="profile-key"><i class="solid"></i> Solid <i class="blood"></i> Blood <i class="rare"></i> Rare <i class="mixed"></i> Mixed</div></section>

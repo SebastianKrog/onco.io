@@ -102,38 +102,38 @@ acceptance criteria.
 
 ## Milestone 4 — Dispatch, convoy, and contest correctness
 
-- [ ] **Persist dispatch preferences.** Add authoritative All/single-treatment
+- [x] **Persist dispatch preferences.** Add authoritative All/single-treatment
   filters and 10–100% commitment in five-point steps, including 25/50/75
   shortcuts, without changing the selected manufacturing product.
-- [ ] **Expose order validation and capacity.** Show packet capacity, source
+- [x] **Expose order validation and capacity.** Show packet capacity, source
   cooldown, convoy slots, reserved foreign-target slots, and per-target committed
   capacity before submission; display the server's exact rejection reason.
-- [ ] **Visualize and resolve convoy routes.** Draw the chosen BFS route and
+- [x] **Visualize and resolve convoy routes.** Draw the chosen BFS route and
   destination, preserve launch-time edge speed, aggregate terminal arrivals by
   company, halt broken friendly routes at the last reached node, and alert once
   when a route is interrupted.
-- [ ] **Define full-storage arrival disposition.** Confirm in the normative spec
+- [x] **Define full-storage arrival disposition.** Confirm in the normative spec
   whether the non-admitted fraction is discarded, remains in transit, or is
   returned, then implement and visibly report that outcome without hidden supply
   loss.
-- [ ] **Expose withdrawals.** Permit withdrawal only to an adjacent owned region
+- [x] **Expose withdrawals.** Permit withdrawal only to an adjacent owned region
   with a convoy slot, remove the entire campaign immediately, destroy exactly 20%
   of every included treatment, and send the remaining 80% as one convoy.
-- [ ] **Preserve surviving parties in disputed regions.** When the incumbent is
+- [x] **Preserve surviving parties in disputed regions.** When the incumbent is
   exhausted and multiple attackers remain, make the region ownerless while
   retaining those campaigns for subsequent simultaneous resolution; do not erase
   their surviving supply.
-- [ ] **Complete simultaneous-contest edge cases.** Preserve prior ownership or
+- [x] **Complete simultaneous-contest edge cases.** Preserve prior ownership or
   neutrality when every party exhausts together, apply capture downgrades exactly
   once, retain over-capacity winning supply, and delay all ownership updates until
   every region in the step has resolved.
-- [ ] **Add stock-comparison previews.** Compare arriving force with every visible
+- [x] **Add stock-comparison previews.** Compare arriving force with every visible
   incumbent party and label it advantage, comparable, disadvantage, or unopposed
   using the specified thresholds and non-predictive wording.
 
 ### Milestone acceptance
 
-- [ ] Tests cover all published solver examples, pressure conservation, equal
+- [x] Tests cover all published solver examples, pressure conservation, equal
   two- and three-party exhaustion, persistent multi-attacker disputes, mixed
   inventories, same-step arrival aggregation, three-edge R11 timing, route breaks,
   source loss, slot grandfathering, unexpected hostile arrivals, withdrawals,
