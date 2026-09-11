@@ -8,22 +8,22 @@ test('playtest report measures authoritative events against immutable targets', 
   const telemetry={balanceVersion:'0.2',events:[
     {type:'region-change',at:8,fromCompanyId:null,toCompanyId:'a'},
     {type:'research-complete',at:39,companyId:'a'},
-    {type:'dispatch',at:60,launchForceRatio:1.5,route:3},
+    {type:'contest-start',at:60,rivalContest:true},
     {type:'contest-end',at:72,duration:12},
     {type:'treatment-output',at:300,treatment:'immunotherapy'},
     {type:'programme-depleted',at:350}
   ],companies:{a:{completedResearch:7}},totals:{dispatches:2,contestSeconds:12,programmes:1,treatmentOutput:{medicine:70,radiotherapy:15,targeted:5,immunotherapy:10,vaccine:0}}};
   const report=buildPlaytestReport(telemetry,{elapsed:720,result:{type:'timed'}});
   assert.equal(Object.isFrozen(BALANCE_TARGETS),true);
-  assert.deepEqual(Object.fromEntries(Object.entries(report.targets).map(([key,value])=>[key,value.status])),{neutralCapture:'on-target',firstResearch:'on-target',firstContest:'on-target',ordinaryContest:'on-target',advancedProduct:'on-target',completedResearch:'on-target',specialistProduction:'on-target',programmeCounterplay:'on-target',networkReinforcement:'on-target'});
+  assert.deepEqual(Object.fromEntries(Object.entries(report.targets).map(([key,value])=>[key,value.status])),{opening:'on-target',neutralCapture:'on-target',firstResearch:'on-target',firstContest:'on-target',ordinaryContest:'on-target',advancedProduct:'on-target',completedResearch:'on-target',specialistProduction:'on-target',programmeCounterplay:'on-target'});
   assert.equal(report.complete,true);assert.equal(report.observations.victoryType,'timed');
   assert.equal(report.observations.completedContests,1);
 });
 
-test('playtest aggregation excludes incomplete matches and missing samples', () => {
+test('playtest aggregation classifies incomplete matches and missing samples', () => {
   const finished=buildPlaytestReport({events:[{type:'research-complete',at:40}],companies:{},totals:{}},{result:{type:'dominance'}});
   const aggregate=aggregatePlaytests([finished,buildPlaytestReport({events:[],totals:{}})]);
-  assert.equal(aggregate.matches,1);assert.equal(aggregate.targets.firstResearch.mean,40);assert.equal(aggregate.targets.neutralCapture.samples,0);assert.deepEqual(aggregate.victories,{dominance:1});
+  assert.equal(aggregate.matches,1);assert.equal(aggregate.submitted,2);assert.equal(aggregate.targets.firstResearch.mean,40);assert.equal(aggregate.targets.neutralCapture.samples,1);assert.equal(aggregate.targets.neutralCapture.missing,1);assert.deepEqual(aggregate.victories,{dominance:1});
   assert.equal(aggregate.victoryDistribution.dominance,1);assert.equal(aggregate.dominanceShare,1);
 });
 

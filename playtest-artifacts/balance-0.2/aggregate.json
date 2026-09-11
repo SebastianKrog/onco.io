@@ -1,0 +1,621 @@
+{
+  "artifactVersion": 1,
+  "balanceVersion": "0.2",
+  "minimumSamples": 3,
+  "lobbyResults": {
+    "20": {
+      "balanceVersion": "0.2",
+      "matches": 3,
+      "submitted": 3,
+      "minimumSamples": 3,
+      "targets": {
+        "opening": {
+          "samples": 3,
+          "observed": 3,
+          "missing": 0,
+          "mean": 0,
+          "min": 0,
+          "max": 0,
+          "median": 0,
+          "values": [
+            0,
+            0,
+            0
+          ],
+          "classifications": {
+            "observed": 3,
+            "not-observed": 0
+          },
+          "onTarget": 3,
+          "onTargetShare": 1,
+          "pass": true
+        },
+        "neutralCapture": {
+          "samples": 3,
+          "observed": 3,
+          "missing": 0,
+          "mean": 286.8333333333333,
+          "min": 203,
+          "max": 348.25,
+          "median": 309.25,
+          "values": [
+            203,
+            309.25,
+            348.25
+          ],
+          "classifications": {
+            "observed": 3,
+            "not-observed": 0
+          },
+          "onTarget": 3,
+          "onTargetShare": 1,
+          "pass": true
+        },
+        "firstResearch": {
+          "samples": 3,
+          "observed": 3,
+          "missing": 0,
+          "mean": 152.83333333333334,
+          "min": 146.25,
+          "max": 156.75,
+          "median": 155.5,
+          "values": [
+            146.25,
+            155.5,
+            156.75
+          ],
+          "classifications": {
+            "observed": 3,
+            "not-observed": 0
+          },
+          "onTarget": 3,
+          "onTargetShare": 1,
+          "pass": true
+        },
+        "firstContest": {
+          "samples": 3,
+          "observed": 2,
+          "missing": 1,
+          "mean": 274,
+          "min": 257,
+          "max": 291,
+          "median": 257,
+          "values": [
+            257,
+            291
+          ],
+          "classifications": {
+            "observed": 2,
+            "not-observed": 1
+          },
+          "onTarget": 2,
+          "onTargetShare": 0.6666666666666666,
+          "pass": true
+        },
+        "ordinaryContest": {
+          "samples": 3,
+          "observed": 3,
+          "missing": 0,
+          "mean": 4.489615384615385,
+          "min": 1.375,
+          "max": 6.403846153846154,
+          "median": 5.69,
+          "values": [
+            1.375,
+            5.69,
+            6.403846153846154
+          ],
+          "classifications": {
+            "observed": 3,
+            "not-observed": 0
+          },
+          "onTarget": 3,
+          "onTargetShare": 1,
+          "pass": true
+        },
+        "advancedProduct": {
+          "samples": 3,
+          "observed": 3,
+          "missing": 0,
+          "mean": 172.33333333333334,
+          "min": 171,
+          "max": 173,
+          "median": 173,
+          "values": [
+            171,
+            173,
+            173
+          ],
+          "classifications": {
+            "observed": 3,
+            "not-observed": 0
+          },
+          "onTarget": 3,
+          "onTargetShare": 1,
+          "pass": true
+        },
+        "completedResearch": {
+          "samples": 3,
+          "observed": 3,
+          "missing": 0,
+          "mean": 10.816666666666668,
+          "min": 10.75,
+          "max": 10.85,
+          "median": 10.85,
+          "values": [
+            10.75,
+            10.85,
+            10.85
+          ],
+          "classifications": {
+            "observed": 3,
+            "not-observed": 0
+          },
+          "onTarget": 3,
+          "onTargetShare": 1,
+          "pass": true
+        },
+        "specialistProduction": {
+          "samples": 3,
+          "observed": 3,
+          "missing": 0,
+          "mean": 26.604683559279646,
+          "min": 23.5923056959932,
+          "max": 28.14661883932525,
+          "median": 28.07512614252049,
+          "values": [
+            23.5923056959932,
+            28.07512614252049,
+            28.14661883932525
+          ],
+          "classifications": {
+            "observed": 3,
+            "not-observed": 0
+          },
+          "onTarget": 3,
+          "onTargetShare": 1,
+          "pass": true
+        },
+        "programmeCounterplay": {
+          "samples": 3,
+          "observed": 2,
+          "missing": 1,
+          "mean": 4.5,
+          "min": 2,
+          "max": 7,
+          "median": 2,
+          "values": [
+            2,
+            7
+          ],
+          "classifications": {
+            "observed": 2,
+            "not-observed": 1
+          },
+          "onTarget": 2,
+          "onTargetShare": 0.6666666666666666,
+          "pass": true
+        }
+      },
+      "victories": {
+        "timed": 3
+      },
+      "victoryDistribution": {
+        "timed": 1
+      },
+      "dominanceShare": 0,
+      "victoryPass": true,
+      "pass": true
+    },
+    "30": {
+      "balanceVersion": "0.2",
+      "matches": 3,
+      "submitted": 3,
+      "minimumSamples": 3,
+      "targets": {
+        "opening": {
+          "samples": 3,
+          "observed": 3,
+          "missing": 0,
+          "mean": 0,
+          "min": 0,
+          "max": 0,
+          "median": 0,
+          "values": [
+            0,
+            0,
+            0
+          ],
+          "classifications": {
+            "observed": 3,
+            "not-observed": 0
+          },
+          "onTarget": 3,
+          "onTargetShare": 1,
+          "pass": true
+        },
+        "neutralCapture": {
+          "samples": 3,
+          "observed": 3,
+          "missing": 0,
+          "mean": 333.3333333333333,
+          "min": 326.5,
+          "max": 341.75,
+          "median": 331.75,
+          "values": [
+            326.5,
+            331.75,
+            341.75
+          ],
+          "classifications": {
+            "observed": 3,
+            "not-observed": 0
+          },
+          "onTarget": 3,
+          "onTargetShare": 1,
+          "pass": true
+        },
+        "firstResearch": {
+          "samples": 3,
+          "observed": 3,
+          "missing": 0,
+          "mean": 325.0833333333333,
+          "min": 316.25,
+          "max": 329.5,
+          "median": 329.5,
+          "values": [
+            316.25,
+            329.5,
+            329.5
+          ],
+          "classifications": {
+            "observed": 3,
+            "not-observed": 0
+          },
+          "onTarget": 3,
+          "onTargetShare": 1,
+          "pass": true
+        },
+        "firstContest": {
+          "samples": 3,
+          "observed": 3,
+          "missing": 0,
+          "mean": 365.5,
+          "min": 337.25,
+          "max": 404.75,
+          "median": 354.5,
+          "values": [
+            337.25,
+            354.5,
+            404.75
+          ],
+          "classifications": {
+            "observed": 3,
+            "not-observed": 0
+          },
+          "onTarget": 3,
+          "onTargetShare": 1,
+          "pass": true
+        },
+        "ordinaryContest": {
+          "samples": 3,
+          "observed": 3,
+          "missing": 0,
+          "mean": 3.905092592592593,
+          "min": 2.8125,
+          "max": 4.861111111111111,
+          "median": 4.041666666666667,
+          "values": [
+            2.8125,
+            4.041666666666667,
+            4.861111111111111
+          ],
+          "classifications": {
+            "observed": 3,
+            "not-observed": 0
+          },
+          "onTarget": 3,
+          "onTargetShare": 1,
+          "pass": true
+        },
+        "advancedProduct": {
+          "samples": 3,
+          "observed": 3,
+          "missing": 0,
+          "mean": 330.1666666666667,
+          "min": 323,
+          "max": 333.75,
+          "median": 333.75,
+          "values": [
+            323,
+            333.75,
+            333.75
+          ],
+          "classifications": {
+            "observed": 3,
+            "not-observed": 0
+          },
+          "onTarget": 3,
+          "onTargetShare": 1,
+          "pass": true
+        },
+        "completedResearch": {
+          "samples": 3,
+          "observed": 3,
+          "missing": 0,
+          "mean": 10.9,
+          "min": 10.833333333333334,
+          "max": 10.933333333333334,
+          "median": 10.933333333333334,
+          "values": [
+            10.833333333333334,
+            10.933333333333334,
+            10.933333333333334
+          ],
+          "classifications": {
+            "observed": 3,
+            "not-observed": 0
+          },
+          "onTarget": 3,
+          "onTargetShare": 1,
+          "pass": true
+        },
+        "specialistProduction": {
+          "samples": 3,
+          "observed": 3,
+          "missing": 0,
+          "mean": 27.415165874011127,
+          "min": 25.810628434622245,
+          "max": 29.883995641684475,
+          "median": 26.550873545726667,
+          "values": [
+            25.810628434622245,
+            26.550873545726667,
+            29.883995641684475
+          ],
+          "classifications": {
+            "observed": 3,
+            "not-observed": 0
+          },
+          "onTarget": 3,
+          "onTargetShare": 1,
+          "pass": true
+        },
+        "programmeCounterplay": {
+          "samples": 3,
+          "observed": 2,
+          "missing": 1,
+          "mean": 2,
+          "min": 2,
+          "max": 2,
+          "median": 2,
+          "values": [
+            2,
+            2
+          ],
+          "classifications": {
+            "observed": 2,
+            "not-observed": 1
+          },
+          "onTarget": 2,
+          "onTargetShare": 0.6666666666666666,
+          "pass": true
+        }
+      },
+      "victories": {
+        "timed": 3
+      },
+      "victoryDistribution": {
+        "timed": 1
+      },
+      "dominanceShare": 0,
+      "victoryPass": true,
+      "pass": true
+    },
+    "40": {
+      "balanceVersion": "0.2",
+      "matches": 3,
+      "submitted": 3,
+      "minimumSamples": 3,
+      "targets": {
+        "opening": {
+          "samples": 3,
+          "observed": 3,
+          "missing": 0,
+          "mean": 0,
+          "min": 0,
+          "max": 0,
+          "median": 0,
+          "values": [
+            0,
+            0,
+            0
+          ],
+          "classifications": {
+            "observed": 3,
+            "not-observed": 0
+          },
+          "onTarget": 3,
+          "onTargetShare": 1,
+          "pass": true
+        },
+        "neutralCapture": {
+          "samples": 3,
+          "observed": 3,
+          "missing": 0,
+          "mean": 417.1666666666667,
+          "min": 396,
+          "max": 434.5,
+          "median": 421,
+          "values": [
+            396,
+            421,
+            434.5
+          ],
+          "classifications": {
+            "observed": 3,
+            "not-observed": 0
+          },
+          "onTarget": 3,
+          "onTargetShare": 1,
+          "pass": true
+        },
+        "firstResearch": {
+          "samples": 3,
+          "observed": 3,
+          "missing": 0,
+          "mean": 403.5833333333333,
+          "min": 393.5,
+          "max": 420.5,
+          "median": 396.75,
+          "values": [
+            393.5,
+            396.75,
+            420.5
+          ],
+          "classifications": {
+            "observed": 3,
+            "not-observed": 0
+          },
+          "onTarget": 2,
+          "onTargetShare": 0.6666666666666666,
+          "pass": true
+        },
+        "firstContest": {
+          "samples": 3,
+          "observed": 2,
+          "missing": 1,
+          "mean": 436.625,
+          "min": 396.75,
+          "max": 476.5,
+          "median": 396.75,
+          "values": [
+            396.75,
+            476.5
+          ],
+          "classifications": {
+            "observed": 2,
+            "not-observed": 1
+          },
+          "onTarget": 2,
+          "onTargetShare": 0.6666666666666666,
+          "pass": true
+        },
+        "ordinaryContest": {
+          "samples": 3,
+          "observed": 3,
+          "missing": 0,
+          "mean": 4.148611111111111,
+          "min": 1.05,
+          "max": 7.833333333333333,
+          "median": 3.5625,
+          "values": [
+            1.05,
+            3.5625,
+            7.833333333333333
+          ],
+          "classifications": {
+            "observed": 3,
+            "not-observed": 0
+          },
+          "onTarget": 3,
+          "onTargetShare": 1,
+          "pass": true
+        },
+        "advancedProduct": {
+          "samples": 3,
+          "observed": 2,
+          "missing": 1,
+          "mean": 415,
+          "min": 415,
+          "max": 415,
+          "median": 415,
+          "values": [
+            415,
+            415
+          ],
+          "classifications": {
+            "observed": 2,
+            "not-observed": 1
+          },
+          "onTarget": 2,
+          "onTargetShare": 0.6666666666666666,
+          "pass": true
+        },
+        "completedResearch": {
+          "samples": 3,
+          "observed": 3,
+          "missing": 0,
+          "mean": 10.908333333333333,
+          "min": 10.875,
+          "max": 10.925,
+          "median": 10.925,
+          "values": [
+            10.875,
+            10.925,
+            10.925
+          ],
+          "classifications": {
+            "observed": 3,
+            "not-observed": 0
+          },
+          "onTarget": 3,
+          "onTargetShare": 1,
+          "pass": true
+        },
+        "specialistProduction": {
+          "samples": 3,
+          "observed": 3,
+          "missing": 0,
+          "mean": 26.25588727764993,
+          "min": 24.466428844853326,
+          "max": 27.307217753833,
+          "median": 26.994015234263465,
+          "values": [
+            24.466428844853326,
+            26.994015234263465,
+            27.307217753833
+          ],
+          "classifications": {
+            "observed": 3,
+            "not-observed": 0
+          },
+          "onTarget": 3,
+          "onTargetShare": 1,
+          "pass": true
+        },
+        "programmeCounterplay": {
+          "samples": 3,
+          "observed": 2,
+          "missing": 1,
+          "mean": 1,
+          "min": 1,
+          "max": 1,
+          "median": 1,
+          "values": [
+            1,
+            1
+          ],
+          "classifications": {
+            "observed": 2,
+            "not-observed": 1
+          },
+          "onTarget": 2,
+          "onTargetShare": 0.6666666666666666,
+          "pass": true
+        }
+      },
+      "victories": {
+        "timed": 3
+      },
+      "victoryDistribution": {
+        "timed": 1
+      },
+      "dominanceShare": 0,
+      "victoryPass": true,
+      "pass": true
+    }
+  },
+  "verified": true,
+  "pass": true
+}

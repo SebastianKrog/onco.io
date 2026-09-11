@@ -24,10 +24,11 @@ test('telemetry separates actors and accumulates production, funding, routes, pr
 
 test('deterministic replay verifies every fixed-step boundary',()=>{
   const game=makeGame(),a=game.addPlayer('Alpha'),b=game.addPlayer('Beta');game.start(a,0);game.start(b,3);
-  for(let i=0;i<8;i++)game.tick(.25);
+  for(let i=0;i<20;i++)game.tick(.25);
   const record=structuredClone(game.exportReplay()),result=replayMatch(record);
+  assert.ok(record.boundaries.length>0);
   assert.equal(result.ok,true,JSON.stringify(result.differences));assert.equal(result.game.boundarySnapshots.length,record.boundaries.length);
-  record.boundaries[1].digest='corrupt';assert.equal(replayMatch(record).ok,false);
+  record.boundaries[0].digest='corrupt';assert.equal(replayMatch(record).ok,false);
 });
 
 test('client displays versioned match record and aggregate telemetry',async()=>{

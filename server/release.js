@@ -1,5 +1,6 @@
 import { BALANCE } from './balance.js';
 import { MVP_ACCEPTANCE_SCENARIOS } from './acceptance.js';
+import { CAMPAIGN_CRITERIA } from './playtest.js';
 
 const deepFreeze = value => {
   Object.freeze(value);
@@ -19,7 +20,8 @@ export const RELEASE_GATE = deepFreeze({
 export function evaluateReleaseGate(evidence = {}) {
   const checks = Object.fromEntries(RELEASE_GATE.checks.map(name => [name, RELEASE_GATE.lobbySizes.every(size => evidence.checks?.[name]?.[size] === true)]));
   const acceptance = RELEASE_GATE.acceptanceScenarios.every(id => evidence.acceptanceScenarios?.[id] === true);
-  const playtests = RELEASE_GATE.lobbySizes.every(size => Number(evidence.playtestMatches?.[size]) > 0);
+  const campaign=evidence.verifiedCampaign;
+  const playtests = campaign?.verified===true&&campaign.balanceVersion===BALANCE.version&&RELEASE_GATE.lobbySizes.every(size=>campaign.lobbyResults?.[size]?.pass===true&&campaign.lobbyResults[size].matches>=CAMPAIGN_CRITERIA.minimumSamplesPerLobby);
   const deviationsDocumented = evidence.deviationsDocumented === true;
   const blockers = [...Object.entries(checks).filter(([, passed]) => !passed).map(([name]) => `${name} checks`), ...(!acceptance ? ['22 acceptance scenarios'] : []), ...(!playtests ? ['multiplayer playtests'] : []), ...(!deviationsDocumented ? ['deviation review'] : [])];
   return { ...RELEASE_GATE, checks, acceptance, playtests, deviationsDocumented, ready: blockers.length === 0, blockers };

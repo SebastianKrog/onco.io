@@ -40,3 +40,18 @@ commands, result, and compact SHA-256 fixed-step boundary records. Passing that
 record to `replayMatch(record)` re-simulates the match and reports the first
 divergent boundary. Replay records should be retained alongside playtest data so
 balance results remain reproducible after a new ruleset version is introduced.
+
+## Deterministic balance campaign
+
+Run the documented three-seed campaign for every 20, 30, and 40-company lobby, then verify every replay:
+
+```sh
+npm run playtest:balance
+npm run playtest:verify
+```
+
+Versioned artifacts are written to `playtest-artifacts/balance-<version>/`. Each match artifact contains its balance version, lobby size, seed, final report, lobby aggregate, and replay record. Match files use compact JSON to avoid spending repository space on indentation; `aggregate.json` remains pretty-printed for review and contains the verified campaign evidence. Use `npm run playtest:balance -- --samples=N` to configure the full campaign sample count explicitly (the documented minimum is three per lobby).
+
+A pass requires complete, replay-identical matches of one balance version, at least half of observations in each target, and an explicit victory mix: 50–100% timed wins and 0–25% dominance wins. Missing values remain in the denominator and are explicitly classified as `not-observed` rather than discarded. “Opening” is completion of automated placement at simulation time zero; `firstContest` is the first actual rival contest. Specialist production includes radiotherapy, targeted therapies, and immunotherapy, but excludes vaccines (vaccines remain advanced output and programme supply).
+
+All numeric tuning occurs only in `server/balance.js`, with a balance version bump so evidence from different rulesets can never be combined.
