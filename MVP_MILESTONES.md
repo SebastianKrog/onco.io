@@ -211,7 +211,7 @@ acceptance criteria.
 - [x] **Build a deterministic replay check.** Re-run a match from its seed,
   configuration version, companies, and accepted command sequence and assert the
   same boundary snapshots and result.
-- [ ] **Automate every MVP acceptance scenario.** Add explicit tests for all 22
+- [x] **Automate every MVP acceptance scenario.** Add explicit tests for all 22
   scenarios in section 14 of the gameplay specification rather than relying on
   broad unit coverage or direct state mutation.
 - [ ] **Run multiplayer playtests against balance targets.** Measure opening,
