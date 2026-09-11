@@ -25,14 +25,15 @@ export function runMatch({ lobbySize, seed, matchSeconds=BALANCE.match.seconds }
 export function verifyArtifacts(artifacts,{minimumSamples=CAMPAIGN_CRITERIA.minimumSamplesPerLobby}={}) {
   if(!Array.isArray(artifacts)||!artifacts.length)throw new Error('No campaign artifacts');
   const versions=new Set(artifacts.map(a=>a?.balanceVersion));if(versions.size!==1||!versions.has(BALANCE.version))throw new Error('Mixed or unsupported balance versions');
-  const byLobby={};for(const artifact of artifacts){
+  const byLobby={},replayBoundaries={};for(const artifact of artifacts){
     if(artifact?.artifactVersion!==CAMPAIGN_CRITERIA.artifactVersion||!BALANCE.match.lobbySizes.includes(artifact.lobbySize)||!artifact.finalPlaytestReport||!artifact.replay)throw new Error('Malformed campaign evidence');
     if(!artifact.finalPlaytestReport.complete||!artifact.replay.result)throw new Error('Incomplete match');
-    const replay=replayMatch(artifact.replay);if(!replay.ok||JSON.stringify(replay.actualResult)!==JSON.stringify(replay.expectedResult))throw new Error(`Replay divergence: ${artifact.lobbySize}/${artifact.seed}`);
+    const replay=replayMatch(artifact.replay);if(!replay.ok||JSON.stringify(replay.actualResult)!==JSON.stringify(replay.expectedResult))throw new Error(`Replay divergence: ${artifact.lobbySize}/${artifact.seed} at ${replay.differences[0]?.at??'result'}s`);
+    replayBoundaries[artifact.lobbySize]=(replayBoundaries[artifact.lobbySize]??0)+artifact.replay.boundaries.length;
     (byLobby[artifact.lobbySize]??=[]).push(artifact.finalPlaytestReport);
   }
   const lobbyResults=Object.fromEntries(BALANCE.match.lobbySizes.map(size=>[size,aggregatePlaytests(byLobby[size]??[],{minimumSamples})]));
-  return {artifactVersion:CAMPAIGN_CRITERIA.artifactVersion,balanceVersion:BALANCE.version,minimumSamples,lobbyResults,verified:true,pass:Object.values(lobbyResults).every(x=>x.pass)};
+  return {artifactVersion:CAMPAIGN_CRITERIA.artifactVersion,balanceVersion:BALANCE.version,minimumSamples,lobbyResults,replayBoundaries:Object.fromEntries(BALANCE.match.lobbySizes.map(size=>[size,{total:replayBoundaries[size]??0,verified:replayBoundaries[size]??0,divergences:0}])),verified:true,pass:Object.values(lobbyResults).every(x=>x.pass)};
 }
 export async function runCampaign({seeds=DEFAULT_SEEDS,outputDir=DEFAULT_ARTIFACT_DIR,minimumSamples=CAMPAIGN_CRITERIA.minimumSamplesPerLobby}={}){const artifacts=[];for(const lobbySize of BALANCE.match.lobbySizes)for(const seed of seeds)artifacts.push(runMatch({lobbySize,seed}));const aggregate=verifyArtifacts(artifacts,{minimumSamples});await mkdir(outputDir,{recursive:true});for(const artifact of artifacts){artifact.aggregateResult=aggregate.lobbyResults[artifact.lobbySize];await writeFile(resolve(outputDir,`${artifact.lobbySize}-${artifact.seed}.json`),artifactJson(artifact));}await writeFile(resolve(outputDir,'aggregate.json'),JSON.stringify(aggregate,null,2)+'\n');return aggregate;}
 export async function loadArtifacts(directory=DEFAULT_ARTIFACT_DIR){const files=(await readdir(directory)).filter(x=>x.endsWith('.json')&&x!=='aggregate.json').sort();return Promise.all(files.map(async file=>JSON.parse(await readFile(resolve(directory,file),'utf8'))));}
