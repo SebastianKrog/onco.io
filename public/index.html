@@ -12,14 +12,14 @@
   <header><div class="logo small">onco<span>.io</span></div><div class="tag">HOSPITAL NETWORK CONTROL</div><div id="phase" aria-live="polite">Waiting</div><div id="clock">12:00</div><div id="connection">Connecting…</div></header>
   <main>
     <aside class="panel controls">
-      <h2>Budget allocation</h2><div id="allocations"></div>
-      <h2>Treatment</h2><div id="treatments"></div>
+      <h2>Budget allocation</h2><div id="allocations"></div><div id="budget-presets" class="presets"></div>
+      <h2>Treatment</h2><div id="treatments"></div><div id="switch-status" class="status-line"></div>
       <h2>Commit local supply</h2><label class="commit"><input id="commitment" type="range" min="10" max="100" step="5" value="50"><output id="commit-output">50%</output></label>
       <div class="shortcuts"><button data-commit="25">25%</button><button data-commit="50">50%</button><button data-commit="75">75%</button></div>
       <div id="company"></div>
     </aside>
     <section class="map-wrap"><canvas id="map" width="1120" height="700"></canvas><div id="instruction" aria-live="polite">Waiting for lobby state…</div><div id="notice" role="status" aria-live="polite"></div><div class="profile-key"><i class="solid"></i> Solid <i class="blood"></i> Blood <i class="rare"></i> Rare <i class="mixed"></i> Mixed</div></section>
-    <aside class="panel"><h2>Network leaders</h2><ol id="leaders"></ol><h2>Region intelligence</h2><div id="intel">Select a region.</div><h2>Research programme</h2><div id="research"></div><div id="victory">Hold 60% continuously for 60 seconds, be last standing, or lead at 12:00.</div></aside>
+    <aside class="panel"><h2>Network leaders</h2><ol id="leaders"></ol><h2>Region intelligence</h2><div id="intel">Select a region.</div><h2>Research programme</h2><label class="choice">R05 choice <select id="r05-choice"><option value="">Automatic</option><option value="solid">Solid</option><option value="blood">Blood</option><option value="rare">Rare</option><option value="mixed">Mixed</option></select></label><div id="research-status" class="status-line"></div><div id="research"></div><h2>Infrastructure schedule</h2><div id="infrastructure" class="status-line"></div><div id="victory">Hold 60% continuously for 60 seconds, be last standing, or lead at 12:00.</div></aside>
   </main>
   <script type="module" src="/client.js"></script>
 </body></html>
