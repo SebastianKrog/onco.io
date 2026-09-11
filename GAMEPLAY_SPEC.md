@@ -263,3 +263,14 @@ Sources inform broad treatment terminology only—not gameplay costs, timings, m
 4. National Cancer Institute, [Cancer Treatment Vaccines](https://www.cancer.gov/about-cancer/treatment/types/immunotherapy/cancer-treatment-vaccines).
 
 All economic and contest equations, research structure, UI rules, and match numbers in this document are proposed original game design.
+
+## Accepted deviations
+
+This section is normative release-gate input. The HTML comment below is JSON and
+is the machine-readable source of truth. A non-empty `deviations` array must give
+each accepted deviation an `id`, `rationale`, `affectedRule`, `decision`, and
+`regressionCoverage`; prose or a caller-supplied assertion cannot replace it.
+
+<!-- accepted-deviations:{"schemaVersion":1,"none":true,"deviations":[]} -->
+
+There are no accepted deviations from this specification for balance 0.2.

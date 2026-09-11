@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { BALANCE, getBalance } from '../server/balance.js';
 import { Game, replayMatch } from '../server/game.js';
 
-const makeGame=()=>{let id=0;return new Game({random:()=>.25,id:()=>`m7-${++id}`,seed:'milestone-7',columns:2,rows:2,matchSeconds:5});};
+const makeGame=()=>{let id=0;return new Game({random:()=>.25,id:()=>`replay-${++id}`,seed:'replay-check',columns:2,rows:2,matchSeconds:5});};
 
 test('balance configuration is complete, versioned, immutable, and used in metadata',()=>{
   for(const section of ['match','economy','treatments','research','infrastructure','movement','contest','programme','bots'])assert.ok(BALANCE[section]);

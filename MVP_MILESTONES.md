@@ -219,7 +219,7 @@ acceptance criteria.
   advanced-product availability, completed research, specialist production,
   programme counterplay, and victory distribution; tune only through the
   versioned balance configuration.
-- [ ] **Complete the MVP release gate.** Require all unit, integration, browser,
+- [x] **Complete the MVP release gate.** Require all unit, integration, browser,
   replay, acceptance, accessibility, and load checks to pass for every lobby size;
   document any deliberately accepted deviation in `GAMEPLAY_SPEC.md` before
   declaring the MVP complete.

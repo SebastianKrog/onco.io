@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Game } from '../server/game.js';
 
-const makeGame=()=>{let id=0;return new Game({random:()=>.2,id:()=>`m4-${++id}`});};
+const makeGame=()=>{let id=0;return new Game({random:()=>.2,id:()=>`logistics-${++id}`});};
 const inventory=(medicine=0,radiotherapy=0,targeted=0,immunotherapy=0,vaccine=0)=>({medicine,radiotherapy,targeted,immunotherapy,vaccine});
 const advance=(game,seconds)=>{for(let elapsed=0;elapsed<seconds;elapsed+=.25)game.tick(.25);};
 

@@ -10,3 +10,4 @@ canvas:focus{outline:3px solid var(--mint);outline-offset:2px}.region-controls{d
 .target-list li[data-status="on-target"]{border-color:var(--mint);color:#ccefe4}
 .target-list li[data-status="early"],.target-list li[data-status="late"]{border-color:#ffc857;color:#ffe5aa}
 .acceptance{font-size:10px;color:#83a6a7;margin:.4rem 0}.acceptance summary{cursor:pointer}.acceptance ol{padding-left:22px;max-height:180px;overflow:auto}.acceptance li{padding:4px 0}.acceptance li[data-automated="true"]::marker{color:var(--mint)}
+button:focus-visible,input:focus-visible,select:focus-visible,canvas:focus-visible{outline:3px solid #ffc857;outline-offset:3px}
