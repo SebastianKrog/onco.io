@@ -54,3 +54,18 @@ test('connects players, accepts messages, broadcasts state, and enables automati
   app.game.tick(5);app.game.tick(5);app.game.tick(5);app.game.tick(5);app.game.tick(5);app.game.tick(5);app.game.tick(.25);
   assert.equal(app.game.players.get('identity-1').bot, true);
 });
+
+test('a client transport error closes the socket without crashing the server', async t => {
+  const app = await runningApp();
+  t.after(() => app.server.close());
+  const client = new WebSocket(app.ws);
+  await new Promise(resolve => client.addEventListener('open', resolve, { once: true }));
+  const socket = [...app.sockets][0];
+
+  socket.emit('error', Object.assign(new Error('write EPIPE'), { code: 'EPIPE' }));
+  await once(socket, 'close');
+
+  assert.equal(socket.destroyed, true);
+  assert.equal(app.sockets.size, 0);
+  assert.equal(app.game.players.get('identity-1').connected, false);
+});
