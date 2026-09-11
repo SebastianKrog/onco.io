@@ -23,6 +23,19 @@ test('economy conserves net funding across spending, banks, redirection and unus
   const game=makeGame(),player=game.addPlayer();game.start(player,0);player.researchBank=300;player.infrastructureBank=300;player.researchQueue=[];game.regions[0].level=3;game.regions[0].inventories.medicine=0;const beforeBanks=player.researchBank+player.infrastructureBank;game.tick(.25);const bankDelta=(player.researchBank+player.infrastructureBank-beforeBanks)/.25;assert.ok(Math.abs(player.net-(player.researchSpend+player.infrastructureSpend+player.manufacturingSpend+player.unusedManufacturing+bankDelta))<1e-8);assert.equal(player.manufacturingFunding,player.directManufacturingFunding+player.researchOverflow+player.infrastructureOverflow);assert.equal(player.manufacturingFunding,player.manufacturingSpend+player.unusedManufacturing);
 });
 
+test('research with no remaining project redirects the complete current allocation without changing its bank', () => {
+  for(const researchBank of [0,125,300]){const game=makeGame(),player=game.addPlayer();player.researchQueue=[];player.researchBank=researchBank;const funding=7.25;assert.equal(game.fundResearch(player,funding,.25),funding);assert.equal(player.researchBank,researchBank);assert.equal(player.research,0);}
+});
+
+test('active research continues to combine the existing bank with current funding', () => {
+  const game=makeGame(),player=game.addPlayer();player.researchQueue=['R02'];player.researchBank=10;const funding=1,overflow=game.fundResearch(player,funding,.25),spent=player.researchProgress.R02;assert.equal(overflow,0);assert.ok(spent>0);assert.ok(Math.abs(spent+player.researchBank-11)<1e-8);
+});
+
+test('completed research redirect is counted once in manufacturing, telemetry, and the economy ledger', () => {
+  const game=makeGame(),player=game.addPlayer();game.start(player,0);player.researchQueue=[];player.researchBank=125;player.allocation={research:40,manufacturing:60,infrastructure:0};game.regions[0].inventories.medicine=0;const beforeRevenue=player.revenue;game.tick(.25);const redirected=player.net*.25*.4;
+  assert.equal(player.researchBank,125);assert.ok(Math.abs(player.researchOverflow*.25-redirected)<1e-8);assert.ok(Math.abs(player.manufacturingFunding*.25-player.net*.25)<1e-8);assert.ok(Math.abs((player.manufacturingSpend+player.unusedManufacturing)*.25-player.net*.25)<1e-8);assert.ok(Math.abs(player.revenue-beforeRevenue-player.net*.25)<1e-8);assert.ok(Math.abs(game.companyTelemetry(player).redirectedFunding-redirected)<1e-8);assert.ok(Math.abs(game.telemetry.totals.redirectedFunding-redirected)<1e-8);
+});
+
 test('weighted factories redistribute around processing and storage caps', () => {
   const game=makeGame(),player=game.addPlayer();game.start(player,0);for(const id of [1,2]){game.regions[id].ownerId=player.id;game.regions[id].level=1;game.regions[id].inventories.medicine=0;}game.regions[0].inventories.medicine=299.5;player.productionPin=1;const before=game.regions.map(r=>r.inventories.medicine);game.manufacture(player,3,.25,[game.regions[0],game.regions[1],game.regions[2]]);const made=[0,1,2].map(id=>game.regions[id].inventories.medicine-before[id]);assert.equal(made[0],.5);assert.ok(made[1]>made[2]);assert.ok(Math.abs(made.reduce((a,b)=>a+b,0)-3)<1e-8);assert.equal(player.unusedManufacturing,0);
 });
