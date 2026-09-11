@@ -155,7 +155,7 @@ The source has a five-second post-capture lock and one dispatch per second. Dedu
 
 Hostile orders travel one edge. Friendly transfers use one BFS shortest path through owned regions, ascending region ID for ties. Edge time is the slowest included treatment, frozen at launch and ×0.80 when R11 is already complete. Transit does not defend or use storage. At each edge: a lost reached region becomes a campaign; at a friendly destination unload; continue over an owned next edge; otherwise halt at the last friendly node. Never reroute automatically.
 
-Arrivals in one step aggregate by company before capacity or combat. Current ownership determines reinforce versus campaign. Withdrawals require an adjacent owned destination and convoy slot, immediately remove the whole campaign, destroy exactly 20% of every treatment, and send the remaining 80% as one convoy.
+Arrivals in one step aggregate by company before capacity or combat. Current ownership determines reinforce versus campaign. At a friendly region, the admitted fraction fills the remaining storage proportionally across included treatments and all excess is discarded; the arrival report exposes admitted and discarded capacity. Withdrawals require an adjacent owned destination and convoy slot, immediately remove the whole campaign, destroy exactly 20% of every treatment, and send the remaining 80% as one convoy.
 
 ## 9. Simultaneous deterministic contests
 
