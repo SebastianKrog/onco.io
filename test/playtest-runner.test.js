@@ -16,7 +16,7 @@ test('aggregation classifies missing and out-of-target samples as failures',()=>
 
 test('verification rejects replay divergence, mixed versions, incomplete and malformed evidence',()=>{
   const artifacts=BALANCE.match.lobbySizes.map(lobbySize=>runMatch({lobbySize,seed:'verify',matchSeconds:.25}));
-  assert.equal(verifyArtifacts(artifacts,{minimumSamples:1}).verified,true);
+  const verification=verifyArtifacts(artifacts,{minimumSamples:1});assert.equal(verification.verified,true);for(const artifact of artifacts)assert.deepEqual(verification.replayBoundaries[artifact.lobbySize],{total:1,verified:1,divergences:0});
   const corrupt=structuredClone(artifacts);corrupt[0].replay.boundaries[0].digest='bad';assert.throws(()=>verifyArtifacts(corrupt,{minimumSamples:1}),/divergence/);
   const mixed=structuredClone(artifacts);mixed[0].balanceVersion='old';assert.throws(()=>verifyArtifacts(mixed,{minimumSamples:1}),/Mixed/);
   const incomplete=structuredClone(artifacts);incomplete[0].finalPlaytestReport.complete=false;assert.throws(()=>verifyArtifacts(incomplete,{minimumSamples:1}),/Incomplete/);
