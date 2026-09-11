@@ -8,32 +8,32 @@ acceptance criteria.
 
 ## Milestone 1 — Match lifecycle and authoritative input
 
-- [ ] **Introduce explicit lobby and match phases.** Model waiting, placement,
+- [x] **Introduce explicit lobby and match phases.** Model waiting, placement,
   active, and finished phases; start the 720-second match clock only when the
   active phase begins; reject gameplay commands that are invalid for the current
   phase; and freeze state after a result.
-- [ ] **Support the three lobby sizes.** Allow 20, 30, or 40 company slots,
+- [x] **Support the three lobby sizes.** Allow 20, 30, or 40 company slots,
   default to 20, associate each size with its specified map template, and enforce
   the selected capacity for human and bot participants.
-- [ ] **Run the placement countdown.** Reserve pads selected by players, fill all
+- [x] **Run the placement countdown.** Reserve pads selected by players, fill all
   vacant slots with bots after 20 seconds, assign unplaced companies to remaining
   pads deterministically, and begin every company's automation simultaneously.
-- [ ] **Handle late connections.** Prevent placement into an active match and
+- [x] **Handle late connections.** Prevent placement into an active match and
   either attach the connection as a spectator or direct it to a waiting lobby.
-- [ ] **Queue commands at fixed-step boundaries.** Store valid command envelopes
+- [x] **Queue commands at fixed-step boundaries.** Store valid command envelopes
   with a unique client ID, receive time, and acceptance sequence; process them in
   order at stage one of the next 250 ms step; and deduct commitments only then.
-- [ ] **Make command outcomes reproducible.** Retain enough accepted/rejected
+- [x] **Make command outcomes reproducible.** Retain enough accepted/rejected
   command metadata to replay a match, return a specific rejection reason without
   partial mutation, and define whether rejected IDs remain consumed.
-- [ ] **Add persistent reconnect identity.** Issue a reconnect credential,
+- [x] **Add persistent reconnect identity.** Issue a reconnect credential,
   associate a new socket with its existing company, restore human control before
   or after the 30-second bot takeover, and permanently reject reconnection to a
   surrendered company.
 
 ### Milestone acceptance
 
-- [ ] Integration tests cover lobby sizes, countdown bot filling, simultaneous
+- [x] Integration tests cover lobby sizes, countdown bot filling, simultaneous
   start, spectators, phase validation, ordered same-step commands, duplicate
   commands, disconnect takeover, reconnect, surrender, and post-result freeze.
 

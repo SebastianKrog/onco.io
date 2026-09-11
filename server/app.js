@@ -40,8 +40,11 @@ export function createApp({ game = new Game(), tickRate = 50 } = {}) {
     const accept = createHash('sha1').update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`).digest('base64');
     socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
     sockets.add(socket);
-    const player = game.addPlayer();
-    send(socket, JSON.stringify({ type: 'welcome', id: player.id }));
+    const credential = new URL(request.url, 'http://localhost').searchParams.get('credential');
+    const reconnected = credential ? game.reconnect(credential) : null;
+    const connection = reconnected ? { player: reconnected, credential: reconnected.credential, spectator: false } : game.connect();
+    const player = connection.player;
+    send(socket, JSON.stringify({ type: 'welcome', id: player?.id ?? null, credential: connection.credential, spectator: connection.spectator, reconnected: Boolean(reconnected) }));
     let pending = Buffer.alloc(0);
     socket.on('data', chunk => {
       pending = Buffer.concat([pending, chunk]);
@@ -61,12 +64,12 @@ export function createApp({ game = new Game(), tickRate = 50 } = {}) {
         if (opcode === 1) {
           try {
             const message = JSON.parse(body.toString());
-            if (!game.handle(player.id, message)) send(socket, JSON.stringify({ type: 'rejected', commandId: message.commandId ?? null, reason: game.lastRejection }));
+            if (!player || !game.handle(player.id, message)) send(socket, JSON.stringify({ type: 'rejected', commandId: message.commandId ?? null, reason: player ? game.lastRejection : 'spectator' }));
           } catch { send(socket, JSON.stringify({ type: 'error', message: 'Invalid message' })); }
         }
       }
     });
-    socket.on('close', () => { sockets.delete(socket); game.removePlayer(player.id); });
+    socket.on('close', () => { sockets.delete(socket); if(player)game.removePlayer(player.id); });
   });
   const broadcast = () => {
     const payload = JSON.stringify({ type: 'state', ...game.snapshot() });
