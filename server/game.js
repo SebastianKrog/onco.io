@@ -16,6 +16,22 @@ export const PHASES = Object.freeze({
   FINISHED: "finished",
 });
 export const PROFILES = ["solid", "blood", "rare", "mixed"];
+// Ordered to keep neighbouring join positions visually distinct on the dark
+// map. The pattern index is also sent to clients so ownership never relies on
+// colour alone.
+export const COMPANY_COLORS = [
+  "#46ddb0",
+  "#ff8a5b",
+  "#8fa7ff",
+  "#f5c451",
+  "#e77bd8",
+  "#55c8e8",
+  "#d4e66a",
+  "#ff7895",
+];
+export const companyColor = (index) =>
+  COMPANY_COLORS[index] ??
+  `hsl(${Math.round((index * 137.508) % 360)} 72% ${index % 2 ? 68 : 56}%)`;
 export const BALANCE_VERSION = BALANCE.version;
 export const TREATMENTS = BALANCE.treatments;
 export const RESEARCH = BALANCE.research;
@@ -202,10 +218,12 @@ export class Game {
     const playerId = this.id();
     credential ??= this.id();
     const inventory = this.emptyInventory();
+    const appearanceIndex = this.players.size;
     const p = {
       id: playerId,
       name: cleanName(name),
-      color: `hsl(${Math.floor(this.random() * 360)} 70% 58%)`,
+      color: companyColor(appearanceIndex),
+      ownershipPattern: appearanceIndex % 4,
       initials: "",
       started: false,
       eliminated: false,
