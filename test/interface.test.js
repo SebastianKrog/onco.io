@@ -20,6 +20,14 @@ test('focus pins toggle, validate precisely, and surrender state is exposed',()=
   player.surrendered=true;player.bot=true;assert.equal(game.snapshot().players[0].controlState,'surrendered');
 });
 
+test('completed research remains in the canonical twelve-node presentation after reprioritization',async()=>{
+  const game=makeGame(),player=game.addPlayer();game.start(player,0);player.researchProgress.R02=80;game.applyCompletions();
+  assert.ok(player.completed.includes('R02'));assert.equal(game.prioritizeResearch(player,'R08'),true);
+  const state=game.snapshot(),company=state.players[0];
+  assert.equal(state.researchOrder.length,12);assert.equal(new Set(state.researchOrder).size,12);assert.equal(company.researchQueue.includes('R02'),false);assert.equal(company.researchProgress.R02,80);assert.ok(company.completed.includes('R02'));
+  const client=await source('client.js');assert.match(client,/for\(const id of state\.researchOrder\)/);assert.match(client,/complete=me\.completed\.includes\(id\)/);assert.match(client,/button\.disabled=complete/);assert.match(client,/queuePositions/);
+});
+
 test('client includes the complete controls, feedback, keyboard access, and non-colour map cues',async()=>{
   const [html,client,css]=await Promise.all([source('index.html'),source('client.js'),source('style.css')]);
   assert.match(html,/id="specialty"/);assert.match(html,/id="surrender"/);assert.match(html,/tabindex="0"/);assert.match(html,/aria-label="Hospital network map/);assert.match(html,/Operational alerts/);
