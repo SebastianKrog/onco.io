@@ -31,6 +31,13 @@ test('snapshot provides complete operational metrics and selected-region intelli
   assert.equal(region.storageUsed,120);assert.equal(region.storageCapacity,300);assert.equal(region.overCapacity,false);assert.equal(region.productionEligible,true);assert.equal(region.contestParties[0].role,'incumbent');assert.equal(region.productionFocused,true);assert.equal(region.developmentFocused,true);
 });
 
+test('pending continuity programmes do not block eligible manufacturing or snapshot feedback',()=>{
+  const game=makeGame(),player=game.addPlayer('Continuity Manufacturer');game.start(player,0);const region=game.regions[0];
+  player.completed.push('R09');player.allocation={research:0,manufacturing:100,infrastructure:0};region.inventories.medicine=0;region.inventories.vaccine=game.balance.programme.vaccineUnits;
+  assert.equal(game.activateProgramme(player,region.id),true);assert.equal(region.programme.pending,true);const before=region.inventories.medicine;game.tick(game.balance.match.step);
+  assert.ok(region.inventories.medicine>before);assert.ok(player.production>0);assert.equal(region.programme.pending,true);assert.equal(game.snapshot().regions[region.id].productionEligible,true);
+});
+
 test('focus pins toggle, validate precisely, and surrender state is exposed',()=>{
   const game=makeGame(),player=game.addPlayer();game.start(player,0);
   assert.equal(game.setPin(player,'production',0),true);assert.equal(player.productionPin,0);assert.equal(game.setPin(player,'production',0),true);assert.equal(player.productionPin,null);
