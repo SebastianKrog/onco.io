@@ -29,7 +29,7 @@ export function verifyArtifacts(artifacts,{minimumSamples=CAMPAIGN_CRITERIA.mini
     if(artifact?.artifactVersion!==CAMPAIGN_CRITERIA.artifactVersion||!BALANCE.match.lobbySizes.includes(artifact.lobbySize)||!artifact.finalPlaytestReport||!artifact.replay)throw new Error('Malformed campaign evidence');
     if(!artifact.finalPlaytestReport.complete||!artifact.replay.result)throw new Error('Incomplete match');
     const replay=replayMatch(artifact.replay);if(!replay.ok||JSON.stringify(replay.actualResult)!==JSON.stringify(replay.expectedResult))throw new Error(`Replay divergence: ${artifact.lobbySize}/${artifact.seed} at ${replay.differences[0]?.at??'result'}s`);
-    replayBoundaries[artifact.lobbySize]=(replayBoundaries[artifact.lobbySize]??0)+artifact.replay.boundaries.length;
+    replayBoundaries[artifact.lobbySize]=(replayBoundaries[artifact.lobbySize]??0)+replay.verifiedBoundaries;
     (byLobby[artifact.lobbySize]??=[]).push(artifact.finalPlaytestReport);
   }
   const lobbyResults=Object.fromEntries(BALANCE.match.lobbySizes.map(size=>[size,aggregatePlaytests(byLobby[size]??[],{minimumSamples})]));
