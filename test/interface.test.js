@@ -29,7 +29,7 @@ test('snapshot provides complete operational metrics and selected-region intelli
   const game=makeGame(),player=game.addPlayer('Calm Network');game.start(player,0);player.productionPin=0;player.developmentPin=0;player.researchSpend=2;player.infrastructureSpend=1;
   const state=game.snapshot(),company=state.players[0],region=state.regions[0];
   assert.equal(company.ownRegionCount,1);assert.equal(company.controlState,'connected');assert.deepEqual(company.effectiveSpending,{research:2,manufacturing:0,infrastructure:1});assert.equal(company.dominance.threshold,96);assert.equal(company.dominance.requiredSeconds,60);
-  assert.equal(region.storageUsed,120);assert.equal(region.storageCapacity,300);assert.equal(region.overCapacity,false);assert.equal(region.productionEligible,true);assert.equal(region.contestParties[0].role,'incumbent');assert.equal(region.productionFocused,true);assert.equal(region.developmentFocused,true);
+  assert.equal(region.storageUsed,120);assert.equal(region.storageCapacity,300);assert.deepEqual(region.localSupply,{capacity:120,dominantTreatment:'medicine'});assert.equal(region.overCapacity,false);assert.equal(region.productionEligible,true);assert.equal(region.contestParties[0].role,'incumbent');assert.equal(region.productionFocused,true);assert.equal(region.developmentFocused,true);
 });
 
 test('company appearances are stable, distinct, and include a non-colour ownership pattern',()=>{
@@ -64,5 +64,5 @@ test('client includes the complete controls, feedback, keyboard access, and non-
   const [html,client,alerts,css]=await Promise.all([publicSource('index.html'),clientSource('client.js'),clientSource('alert-events.js'),publicSource('style.css')]);
   assert.match(html,/id="specialty"/);assert.match(html,/id="surrender"/);assert.match(html,/tabindex="0"/);assert.match(html,/aria-label="Hospital network map/);assert.match(html,/Operational alerts/);
   for(const command of ["type:'pin'","type:'programme'","type:'withdraw'","type:'research'","type:'surrender'"])assert.match(client,new RegExp(command.replace(':', ':\\s*').replace("'", "['\"]").replace(/'$/, "['\"]")));
-  assert.match(client,/ArrowLeft/);assert.match(alerts,/New supply contest/);assert.match(alerts,/Production is blocked/);assert.match(alerts,/Dominance hold started/);assert.match(client,/contestParties/);assert.match(client,/◆/);assert.match(client,/initials/);assert.match(css,/canvas:focus/);assert.match(client,/ownershipPattern/);assert.match(client,/fillText\("YOU"/);assert.match(client,/mine \? 3/);
+  assert.match(client,/ArrowLeft/);assert.match(alerts,/New supply contest/);assert.match(alerts,/Production is blocked/);assert.match(alerts,/Dominance hold started/);assert.match(client,/contestParties/);assert.match(client,/◆/);assert.match(client,/initials/);assert.match(css,/canvas:focus/);assert.match(client,/ownershipPattern/);assert.match(client,/localSupply\?\.capacity/);assert.match(client,/fillText\("SUPPLY"/);assert.match(client,/hex\.size \* 0\.42/);assert.match(client,/mine \? 3/);
 });

@@ -678,7 +678,11 @@ function drawRegion(region) {
   const hex = geometry(region),
     owner = state.players.find((player) => player.id === region.ownerId),
     mine = owner?.id === myId,
-    contest = region.contestParties?.length > 1;
+    contest = region.contestParties?.length > 1,
+    profileSymbol = { solid: "◆", blood: "●", rare: "▲", mixed: "■" }[
+      region.profile
+    ],
+    supply = region.localSupply?.capacity ?? region.storageUsed;
   traceHex(ctx, hex);
   ctx.fillStyle = owner ? owner.color : "#132c32";
   ctx.globalAlpha = mine ? 0.9 : 0.55;
@@ -732,26 +736,20 @@ function drawRegion(region) {
     mixed: "#ffc857",
   }[region.profile];
   ctx.textAlign = "center";
-  ctx.font = `700 ${Math.max(7, hex.size * 0.18)}px system-ui`;
-  ctx.fillText(
-    { solid: "◆", blood: "●", rare: "▲", mixed: "■" }[region.profile],
-    hex.cx,
-    hex.cy - hex.size * 0.38,
-  );
+  ctx.font = `800 ${Math.max(10, hex.size * 0.25)}px system-ui`;
+  ctx.fillText(profileSymbol, hex.cx, hex.cy - hex.size * 0.5);
   ctx.fillStyle = "#dcebea";
-  ctx.font = `700 ${Math.max(8, Math.min(13, hex.size * 0.22))}px system-ui`;
-  ctx.fillText(owner?.initials ?? "—", hex.cx, hex.cy);
-  if (mine) {
-    ctx.font = `800 ${Math.max(7, Math.min(9, hex.size * 0.15))}px system-ui`;
-    ctx.fillStyle = "#fff";
-    ctx.fillText("YOU", hex.cx, hex.cy + hex.size * 0.2);
-  }
-  ctx.font = `${Math.max(7, Math.min(10, hex.size * 0.17))}px system-ui`;
-  ctx.fillStyle = "#b7cccc";
+  ctx.font = `900 ${Math.max(15, Math.min(25, hex.size * 0.42))}px ui-monospace, monospace`;
+  ctx.fillText(Math.round(supply), hex.cx, hex.cy + hex.size * 0.04);
+  ctx.font = `800 ${Math.max(7, Math.min(10, hex.size * 0.15))}px system-ui`;
+  ctx.fillStyle = "#f5fffc";
+  ctx.fillText("SUPPLY", hex.cx, hex.cy + hex.size * 0.22);
+  ctx.font = `700 ${Math.max(8, Math.min(11, hex.size * 0.18))}px system-ui`;
+  ctx.fillStyle = "#dcebea";
   ctx.fillText(
-    `L${region.level} · ${Math.floor(region.protection)}`,
+    `${mine ? "YOU · " : owner ? `${owner.initials} · ` : ""}L${region.level} · DEF ${Math.floor(region.protection)}`,
     hex.cx,
-    hex.cy + hex.size * 0.42,
+    hex.cy + hex.size * 0.46,
   );
   if (contest) {
     ctx.strokeStyle = "#ef647d";

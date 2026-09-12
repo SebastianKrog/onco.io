@@ -2111,6 +2111,14 @@ export class Game {
       const storageUsed = this.storageUsed(r),
         storageCapacity = this.storageCap(r),
         owner = this.players.get(r.ownerId),
+        dominantSupply = KEYS.map((key) => ({
+          treatment: key,
+          capacity: r.inventories[key] * this.balance.treatments[key].cost,
+        })).sort(
+          (a, b) =>
+            b.capacity - a.capacity ||
+            KEYS.indexOf(a.treatment) - KEYS.indexOf(b.treatment),
+        )[0],
         contestParties = [];
       if (this.defenderForce(r) > 0)
         contestParties.push({
@@ -2134,6 +2142,14 @@ export class Game {
         ...r,
         storageUsed,
         storageCapacity,
+        // Keep the map's primary supply readout authoritative and independent
+        // of presentation code. Capacity is the common unit used by storage,
+        // dispatch commitments, and mixed treatment inventories.
+        localSupply: {
+          capacity: storageUsed,
+          dominantTreatment:
+            dominantSupply.capacity > 0 ? dominantSupply.treatment : null,
+        },
         overCapacity: storageUsed > storageCapacity + 1e-9,
         productionEligible:
           Boolean(owner) &&
