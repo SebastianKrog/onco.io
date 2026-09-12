@@ -22,10 +22,16 @@
     "test:integration:all": "npm run test:integration:20 && npm run test:integration:30 && npm run test:integration:40",
     "test:browser": "node server/browser-runner.js",
     "test:load": "node server/load-runner.js",
-    "release:gate": "node server/release-runner.js"
+    "release:gate": "node server/release-runner.js",
+    "build": "node scripts/build-client.js",
+    "format:client": "prettier --write 'client/*.js' 'scripts/*.js'",
+    "format:server": "prettier --write 'server/*.js'",
+    "format": "prettier --write 'client/*.js' 'server/*.js' 'scripts/*.js'"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
-    "playwright": "^1.63.0"
+    "esbuild": "^0.28.2",
+    "playwright": "^1.63.0",
+    "prettier": "^3.9.6"
   }
 }

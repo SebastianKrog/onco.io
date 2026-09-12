@@ -56,5 +56,5 @@ test('bot strategic policy is slot deterministic, balanced, and prepares level t
 });
 
 test('client exposes continuity activation cost, timing, protection, depletion, and expiry feedback',async()=>{
-  const client=await readFile(new URL('../public/client.js',import.meta.url),'utf8');assert.match(client,/Activate · consume.*programme\.vaccineUnits.*programme\.pendingSeconds/);assert.match(client,/protection depleted/);assert.match(client,/expires in/);assert.match(client,/type:'programme'/);
+  const client=await readFile(new URL('../client/client.js',import.meta.url),'utf8');assert.match(client,/Activate · consume[\s\S]*programme\.vaccineUnits[\s\S]*programme\.pendingSeconds/);assert.match(client,/protection depleted/);assert.match(client,/expires in/);assert.match(client,/type:\s*['\"]programme['\"]/);
 });

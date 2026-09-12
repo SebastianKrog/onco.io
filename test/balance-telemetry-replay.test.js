@@ -47,7 +47,7 @@ test('replay reports a missing fixed-step boundary at its expected 250 ms timest
 });
 
 test('client displays versioned match record and aggregate telemetry',async()=>{
-  const [html,client]=await Promise.all([readFile(new URL('../public/index.html',import.meta.url),'utf8'),readFile(new URL('../public/client.js',import.meta.url),'utf8')]);
+  const [html,client]=await Promise.all([readFile(new URL('../public/index.html',import.meta.url),'utf8'),readFile(new URL('../client/client.js',import.meta.url),'utf8')]);
   assert.match(html,/id="match-record"/);assert.match(client,/state\.balance\?\.version/);assert.match(client,/contest-seconds/);
 });
 
@@ -68,7 +68,7 @@ test('an alternate balance drives economy, movement, contest, programme, bot and
   player.completed.push('R09');game.regions[0].inventories.vaccine=3;assert.equal(game.activateProgramme(player,0),true);assert.equal(game.regions[0].programme.completesAt,11);
   game.regions[0].programme=null;game.convoys=[];game.regions[0].dispatchAvailableAt=0;game.regions[0].inventories.medicine=200;const action=game.runBotTactical(player);assert.equal(action.commitment,20);
   const snapshot=game.snapshot();assert.equal(snapshot.balance,alternate);assert.equal(snapshot.balance.preview.advantageRatio,3);assert.equal(snapshot.balance.movement.targetCapacity,55);
-  const client=await readFile(new URL('../public/client.js',import.meta.url),'utf8');assert.match(client,/state\.balance\.preview\.advantageRatio/);assert.match(client,/state\.balance\.movement\.targetCapacity/);
+  const client=await readFile(new URL('../client/client.js',import.meta.url),'utf8');assert.match(client,/state\.balance\.preview\.advantageRatio/);assert.match(client,/state\.balance\.movement\.targetCapacity/);
 });
 
 test('replay rejection remains explicit for unsupported historical balance versions',()=>{

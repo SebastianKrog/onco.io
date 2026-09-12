@@ -55,3 +55,18 @@ Versioned artifacts are written to `playtest-artifacts/balance-<version>/`. Each
 A pass requires complete, replay-identical matches of one balance version, at least half of observations in each target, and an explicit victory mix: 50–100% timed wins and 0–25% dominance wins. Missing values remain in the denominator and are explicitly classified as `not-observed` rather than discarded. “Opening” is completion of automated placement at simulation time zero; `firstContest` is the first actual rival contest. Specialist production includes radiotherapy, targeted therapies, and immunotherapy, but excludes vaccines (vaccines remain advanced output and programme supply).
 
 All numeric tuning occurs only in `server/balance.js`, with a balance version bump so evidence from different rulesets can never be combined.
+
+## Client development
+
+The readable browser JavaScript lives in `client/`. After changing it, rebuild the
+minified modules and source maps served from `public/`:
+
+```sh
+npm run build
+```
+
+Use `npm run format:client` to format the client sources and build script before
+rebuilding generated assets. Server sources are kept readable in `server/`; use
+`npm run format:server` for those files, or `npm run format` to format all runtime
+JavaScript. The development server serves the checked-in build, so a fresh clone
+can start without compiling first.

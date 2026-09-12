@@ -1,17 +1,2 @@
-export function hexLayout(map, width, height, margin = 12) {
-  const horizontal = Math.sqrt(3);
-  const size = Math.min((width-margin*2)/(horizontal*(map.columns+.5)),(height-margin*2)/(1.5*(map.rows-1)+2));
-  return {size,left:(width-horizontal*size*(map.columns+.5))/2,top:(height-size*(1.5*(map.rows-1)+2))/2};
-}
-export function hexGeometry(region,map,width,height) {
-  const layout=hexLayout(map,width,height),hexWidth=Math.sqrt(3)*layout.size;
-  const cx=layout.left+hexWidth/2+(region.column+(region.row%2)/2)*hexWidth,cy=layout.top+layout.size+region.row*layout.size*1.5;
-  const points=Array.from({length:6},(_,index)=>{const angle=Math.PI/180*(60*index-90);return{x:cx+layout.size*Math.cos(angle),y:cy+layout.size*Math.sin(angle)};});
-  return {cx,cy,size:layout.size,points};
-}
-export function pointInHex(region,x,y,map,width,height) {
-  const {points}=hexGeometry(region,map,width,height);let inside=false;
-  for(let i=0,j=points.length-1;i<points.length;j=i++) {const a=points[i],b=points[j];if((a.y>y)!==(b.y>y)&&x<(b.x-a.x)*(y-a.y)/(b.y-a.y)+a.x)inside=!inside;}
-  return inside;
-}
-export function traceHex(context,geometry) {context.beginPath();geometry.points.forEach((point,index)=>index?context.lineTo(point.x,point.y):context.moveTo(point.x,point.y));context.closePath();}
+function hexLayout(map,width,height,margin=12){const horizontal=Math.sqrt(3);const size=Math.min((width-margin*2)/(horizontal*(map.columns+.5)),(height-margin*2)/(1.5*(map.rows-1)+2));return{size,left:(width-horizontal*size*(map.columns+.5))/2,top:(height-size*(1.5*(map.rows-1)+2))/2}}function hexGeometry(region,map,width,height){const layout=hexLayout(map,width,height),hexWidth=Math.sqrt(3)*layout.size;const cx=layout.left+hexWidth/2+(region.column+region.row%2/2)*hexWidth,cy=layout.top+layout.size+region.row*layout.size*1.5;const points=Array.from({length:6},(_,index)=>{const angle=Math.PI/180*(60*index-90);return{x:cx+layout.size*Math.cos(angle),y:cy+layout.size*Math.sin(angle)}});return{cx,cy,size:layout.size,points}}function pointInHex(region,x,y,map,width,height){const{points}=hexGeometry(region,map,width,height);let inside=false;for(let i=0,j=points.length-1;i<points.length;j=i++){const a=points[i],b=points[j];if(a.y>y!==b.y>y&&x<(b.x-a.x)*(y-a.y)/(b.y-a.y)+a.x)inside=!inside}return inside}function traceHex(context,geometry){context.beginPath();geometry.points.forEach((point,index)=>index?context.lineTo(point.x,point.y):context.moveTo(point.x,point.y));context.closePath()}export{hexGeometry,hexLayout,pointInHex,traceHex};
+//# sourceMappingURL=hex.js.map

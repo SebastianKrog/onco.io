@@ -30,7 +30,7 @@ test('playtest aggregation classifies incomplete matches and missing samples', (
 test('snapshots and the client expose live balance observations', async () => {
   const game=new Game({columns:2,rows:2,seed:'report'}), state=game.snapshot();
   assert.equal(state.playtest.balanceVersion,state.balance.version);assert.equal(state.playtest.targets.firstContest.status,'pending');
-  const [html,client]=await Promise.all([readFile(new URL('../public/index.html',import.meta.url),'utf8'),readFile(new URL('../public/client.js',import.meta.url),'utf8')]);
+  const [html,client]=await Promise.all([readFile(new URL('../public/index.html',import.meta.url),'utf8'),readFile(new URL('../client/client.js',import.meta.url),'utf8')]);
   assert.match(html,/id="playtest-report"/);assert.match(html,/id="playtest-summary"/);assert.match(client,/state\.playtest/);assert.match(client,/target\.status/);assert.match(client,/completed contests/);
 });
 
