@@ -2037,7 +2037,7 @@ export class Game {
     this.phase = PHASES.FINISHED;
     this.finishedAt = this.now();
   }
-  snapshot() {
+  snapshot({ includeTelemetryEvents = true } = {}) {
     const threshold = Math.ceil(
         this.balance.match.dominanceShare * this.regions.length,
       ),
@@ -2175,7 +2175,11 @@ export class Game {
       contests: [...this.contests.values()],
       arrivalReports: this.arrivalReports,
       routeInterruptions: this.routeInterruptions,
-      telemetry: this.telemetry,
+      // Full event history remains available to diagnostics and playtest tools.
+      // The browser uses aggregate totals and the precomputed playtest report.
+      telemetry: includeTelemetryEvents
+        ? this.telemetry
+        : { ...this.telemetry, events: [] },
       playtest: buildPlaytestReport(this.telemetry, {
         elapsed: this.elapsed,
         result: this.result,

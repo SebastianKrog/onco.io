@@ -7,13 +7,18 @@ import { fileURLToPath } from "node:url";
 import { Game } from "./game.js";
 
 const publicDir = fileURLToPath(new URL("../public/", import.meta.url));
+const MAX_SOCKET_BUFFER_BYTES = 1024 * 1024;
 const mime = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
 };
 
-export function createApp({ game = new Game(), tickRate = 50 } = {}) {
+export function createApp({
+  game = new Game(),
+  tickRate = 50,
+  broadcastRate = 250,
+} = {}) {
   const server = createServer(async (request, response) => {
     const pathname = new URL(request.url, "http://localhost").pathname;
     const relative =
@@ -57,9 +62,16 @@ export function createApp({ game = new Game(), tickRate = 50 } = {}) {
     header.writeBigUInt64BE(BigInt(payload.length), 2);
     return Buffer.concat([header, payload]);
   };
-  const send = (socket, data) => {
-    if (!socket.destroyed) socket.write(frame(data));
+  const writeFrame = (socket, payload) => {
+    if (socket.destroyed || socket.writableEnded) return;
+    // Bound all output, including replies to commands from a stalled client.
+    if (socket.writableLength + payload.length > MAX_SOCKET_BUFFER_BYTES) {
+      socket.destroy();
+      return;
+    }
+    socket.write(payload);
   };
+  const send = (socket, data) => writeFrame(socket, frame(data));
   server.on("upgrade", (request, socket) => {
     const key = request.headers["sec-websocket-key"];
     if (!key) {
@@ -157,12 +169,33 @@ export function createApp({ game = new Game(), tickRate = 50 } = {}) {
     });
   });
   const broadcast = () => {
-    const payload = JSON.stringify({ type: "state", ...game.snapshot() });
-    for (const client of sockets) send(client, payload);
+    // Snapshots replace older state. Skip a backed-up connection instead of
+    // retaining a queue of obsolete snapshots; resume with the latest state.
+    const ready = [...sockets].filter(
+      (socket) =>
+        !socket.destroyed &&
+        !socket.writableEnded &&
+        !socket.writableNeedDrain &&
+        socket.writableLength === 0,
+    );
+    if (!ready.length) return;
+    const payload = frame(
+      JSON.stringify({
+        type: "state",
+        ...game.snapshot({ includeTelemetryEvents: false }),
+      }),
+    );
+    // Share one encoded buffer across clients instead of allocating per client.
+    for (const client of ready) writeFrame(client, payload);
   };
+  let broadcastElapsed = 0;
   const timer = setInterval(() => {
     game.tick(tickRate / 1000);
-    broadcast();
+    broadcastElapsed += tickRate;
+    if (broadcastElapsed >= broadcastRate) {
+      broadcastElapsed %= broadcastRate;
+      broadcast();
+    }
   }, tickRate);
   timer.unref();
   server.on("close", () => {
