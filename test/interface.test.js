@@ -2,9 +2,27 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { Game } from '../server/game.js';
+import { AlertEventKeys, operationalAlerts } from '../public/alert-events.js';
 
 const source = name => readFile(new URL(`../public/${name}`, import.meta.url), 'utf8');
 const makeGame=()=>{let id=0;return new Game({random:()=>.2,id:()=>`interface-${++id}`});};
+const alertSnapshot=({owner='me',acquiredAt=1,blocked=false,holding=false,elapsed=1}={})=>({elapsed,players:[{id:'me',unusedManufacturing:0,manufacturingFunding:blocked?10:0,manufacturingSpend:0,dominance:{holding,regions:holding?6:2,threshold:6}}],regions:[{id:0,name:'Region 1',ownerId:owner,acquiredAt,overCapacity:false,campaigns:{},programme:null}]});
+const collectNotices=states=>{const keys=new AlertEventKeys(),result=[];for(let index=1;index<states.length;index++)result.push(...operationalAlerts(states[index-1],states[index],'me',keys));return result;};
+
+test('alert instances survive recapture and identify a later second loss',()=>{
+  const alerts=collectNotices([alertSnapshot(),alertSnapshot({owner:'rival',elapsed:2}),alertSnapshot({owner:'me',acquiredAt:3,elapsed:3}),alertSnapshot({owner:'rival',acquiredAt:3,elapsed:4})]).filter(alert=>alert.key.startsWith('loss:'));
+  assert.equal(alerts.length,2);assert.notEqual(alerts[0].key,alerts[1].key);assert.match(alerts[0].key,/loss:0:1:1/);assert.match(alerts[1].key,/loss:0:3:2/);
+});
+
+test('alert instances survive a dominance reset and identify a new hold',()=>{
+  const alerts=collectNotices([alertSnapshot(),alertSnapshot({holding:true,elapsed:2}),alertSnapshot({holding:true,elapsed:3}),alertSnapshot({holding:false,elapsed:4}),alertSnapshot({holding:true,elapsed:5})]).filter(alert=>alert.key.startsWith('dominance:'));
+  assert.equal(alerts.length,2);assert.notEqual(alerts[0].key,alerts[1].key);
+});
+
+test('manufacturing blockage alerts once, then alerts again after clearing',()=>{
+  const alerts=collectNotices([alertSnapshot(),alertSnapshot({blocked:true,elapsed:2}),alertSnapshot({blocked:true,elapsed:3}),alertSnapshot({blocked:false,elapsed:4}),alertSnapshot({blocked:true,elapsed:5})]).filter(alert=>alert.key.startsWith('blocked:'));
+  assert.equal(alerts.length,2);assert.notEqual(alerts[0].key,alerts[1].key);
+});
 
 test('snapshot provides complete operational metrics and selected-region intelligence',()=>{
   const game=makeGame(),player=game.addPlayer('Calm Network');game.start(player,0);player.productionPin=0;player.developmentPin=0;player.researchSpend=2;player.infrastructureSpend=1;
@@ -29,8 +47,8 @@ test('completed research remains in the canonical twelve-node presentation after
 });
 
 test('client includes the complete controls, feedback, keyboard access, and non-colour map cues',async()=>{
-  const [html,client,css]=await Promise.all([source('index.html'),source('client.js'),source('style.css')]);
+  const [html,client,alerts,css]=await Promise.all([source('index.html'),source('client.js'),source('alert-events.js'),source('style.css')]);
   assert.match(html,/id="specialty"/);assert.match(html,/id="surrender"/);assert.match(html,/tabindex="0"/);assert.match(html,/aria-label="Hospital network map/);assert.match(html,/Operational alerts/);
   for(const command of ["type:'pin'","type:'programme'","type:'withdraw'","type:'research'","type:'surrender'"])assert.match(client,new RegExp(command));
-  assert.match(client,/ArrowLeft/);assert.match(client,/New supply contest/);assert.match(client,/Production is blocked/);assert.match(client,/Dominance hold started/);assert.match(client,/contestParties/);assert.match(client,/◆/);assert.match(client,/initials/);assert.match(css,/canvas:focus/);
+  assert.match(client,/ArrowLeft/);assert.match(alerts,/New supply contest/);assert.match(alerts,/Production is blocked/);assert.match(alerts,/Dominance hold started/);assert.match(client,/contestParties/);assert.match(client,/◆/);assert.match(client,/initials/);assert.match(css,/canvas:focus/);
 });
