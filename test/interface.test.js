@@ -2,9 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { Game } from '../server/game.js';
-import { AlertEventKeys, operationalAlerts } from '../public/alert-events.js';
+import { AlertEventKeys, operationalAlerts } from '../client/alert-events.js';
 
-const source = name => readFile(new URL(`../public/${name}`, import.meta.url), 'utf8');
+const publicSource = name => readFile(new URL(`../public/${name}`, import.meta.url), 'utf8');
+const clientSource = name => readFile(new URL(`../client/${name}`, import.meta.url), 'utf8');
 const makeGame=()=>{let id=0;return new Game({random:()=>.2,id:()=>`interface-${++id}`});};
 const alertSnapshot=({owner='me',acquiredAt=1,blocked=false,holding=false,elapsed=1}={})=>({elapsed,players:[{id:'me',unusedManufacturing:0,manufacturingFunding:blocked?10:0,manufacturingSpend:0,dominance:{holding,regions:holding?6:2,threshold:6}}],regions:[{id:0,name:'Region 1',ownerId:owner,acquiredAt,overCapacity:false,campaigns:{},programme:null}]});
 const collectNotices=states=>{const keys=new AlertEventKeys(),result=[];for(let index=1;index<states.length;index++)result.push(...operationalAlerts(states[index-1],states[index],'me',keys));return result;};
@@ -50,12 +51,12 @@ test('completed research remains in the canonical twelve-node presentation after
   assert.ok(player.completed.includes('R02'));assert.equal(game.prioritizeResearch(player,'R08'),true);
   const state=game.snapshot(),company=state.players[0];
   assert.equal(state.researchOrder.length,12);assert.equal(new Set(state.researchOrder).size,12);assert.equal(company.researchQueue.includes('R02'),false);assert.equal(company.researchProgress.R02,80);assert.ok(company.completed.includes('R02'));
-  const client=await source('client.js');assert.match(client,/for\(const id of state\.researchOrder\)/);assert.match(client,/complete=me\.completed\.includes\(id\)/);assert.match(client,/button\.disabled=complete/);assert.match(client,/queuePositions/);
+  const client=await clientSource('client.js');assert.match(client,/for\s*\(const id of state\.researchOrder\)/);assert.match(client,/complete\s*=\s*me\.completed\.includes\(id\)/);assert.match(client,/button\.disabled\s*=\s*complete/);assert.match(client,/queuePositions/);
 });
 
 test('client includes the complete controls, feedback, keyboard access, and non-colour map cues',async()=>{
-  const [html,client,alerts,css]=await Promise.all([source('index.html'),source('client.js'),source('alert-events.js'),source('style.css')]);
+  const [html,client,alerts,css]=await Promise.all([publicSource('index.html'),clientSource('client.js'),clientSource('alert-events.js'),publicSource('style.css')]);
   assert.match(html,/id="specialty"/);assert.match(html,/id="surrender"/);assert.match(html,/tabindex="0"/);assert.match(html,/aria-label="Hospital network map/);assert.match(html,/Operational alerts/);
-  for(const command of ["type:'pin'","type:'programme'","type:'withdraw'","type:'research'","type:'surrender'"])assert.match(client,new RegExp(command));
+  for(const command of ["type:'pin'","type:'programme'","type:'withdraw'","type:'research'","type:'surrender'"])assert.match(client,new RegExp(command.replace(':', ':\\s*').replace("'", "['\"]").replace(/'$/, "['\"]")));
   assert.match(client,/ArrowLeft/);assert.match(alerts,/New supply contest/);assert.match(alerts,/Production is blocked/);assert.match(alerts,/Dominance hold started/);assert.match(client,/contestParties/);assert.match(client,/◆/);assert.match(client,/initials/);assert.match(css,/canvas:focus/);
 });

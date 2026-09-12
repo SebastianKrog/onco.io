@@ -1,190 +1,2289 @@
-import { createHash, randomUUID } from 'node:crypto';
-import { createSeededMap, MAP_TEMPLATES, regionNeighbours } from './map.js';
-import { BUDGET_PRESETS, redistributeBudget } from '../public/budget.js';
-import { BALANCE, getBalance } from './balance.js';
-import { buildPlaytestReport } from './playtest.js';
-import { publishedReleaseGate } from './release.js';
-import { acceptanceCoverage } from './acceptance.js';
+import { createHash, randomUUID } from "node:crypto";
+import { createSeededMap, MAP_TEMPLATES, regionNeighbours } from "./map.js";
+import { BUDGET_PRESETS, redistributeBudget } from "../client/budget.js";
+import { BALANCE, getBalance } from "./balance.js";
+import { buildPlaytestReport } from "./playtest.js";
+import { publishedReleaseGate } from "./release.js";
+import { acceptanceCoverage } from "./acceptance.js";
 
 export const STEP = BALANCE.match.step;
 export const MAP = { columns: 16, rows: 10 };
 export const LOBBY_SIZES = MAP_TEMPLATES;
-export const PHASES = Object.freeze({ WAITING: 'waiting', PLACEMENT: 'placement', ACTIVE: 'active', FINISHED: 'finished' });
-export const PROFILES = ['solid', 'blood', 'rare', 'mixed'];
+export const PHASES = Object.freeze({
+  WAITING: "waiting",
+  PLACEMENT: "placement",
+  ACTIVE: "active",
+  FINISHED: "finished",
+});
+export const PROFILES = ["solid", "blood", "rare", "mixed"];
 export const BALANCE_VERSION = BALANCE.version;
 export const TREATMENTS = BALANCE.treatments;
 export const RESEARCH = BALANCE.research;
-export const DEFAULT_RESEARCH = ['R02','R03','R04','R01','R06','R11','R08','R09','R12','R05','R07','R10'];
+export const DEFAULT_RESEARCH = [
+  "R02",
+  "R03",
+  "R04",
+  "R01",
+  "R06",
+  "R11",
+  "R08",
+  "R09",
+  "R12",
+  "R05",
+  "R07",
+  "R10",
+];
 const KEYS = Object.keys(TREATMENTS);
-const emptyInventory = () => Object.fromEntries(KEYS.map(key => [key, 0]));
+const emptyInventory = () => Object.fromEntries(KEYS.map((key) => [key, 0]));
 const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
-const cleanName = name => String(name ?? '').replace(/[^\p{L}\p{N} ._-]/gu, '').trim().slice(0, 18) || 'Researcher';
-const finite = value => Number.isFinite(Number(value));
+const cleanName = (name) =>
+  String(name ?? "")
+    .replace(/[^\p{L}\p{N} ._-]/gu, "")
+    .trim()
+    .slice(0, 18) || "Researcher";
+const finite = (value) => Number.isFinite(Number(value));
 
-export function treatmentForce(player, key, profile, defending = false, balance = BALANCE) {
-  const base = balance.treatments[key].cost, profiles=balance.treatmentProfiles, effects=balance.researchEffects;
-  let multiplier = key === 'radiotherapy' ? profiles.radiotherapy[profile] : key === 'immunotherapy' ? (profiles.immunotherapy[profile]??profiles.immunotherapy.default) : key === 'vaccine' ? profiles.vaccine : 1;
-  if (key === 'targeted') multiplier = player.targetedIndications.includes(profile) ? profiles.targeted.indicated : profiles.targeted.other;
-  if (key === 'medicine' && player.completed.includes('R02')) multiplier *= effects.medicineProtocols;
-  if (key === 'medicine' && player.completed.includes('R03') && profile === player.specialty) multiplier *= effects.diagnosticSpecialty;
-  if (key === 'radiotherapy' && defending) multiplier *= player.completed.includes('R07') ? effects.radiationDefense : effects.radiationDefenseBase;
+export function treatmentForce(
+  player,
+  key,
+  profile,
+  defending = false,
+  balance = BALANCE,
+) {
+  const base = balance.treatments[key].cost,
+    profiles = balance.treatmentProfiles,
+    effects = balance.researchEffects;
+  let multiplier =
+    key === "radiotherapy"
+      ? profiles.radiotherapy[profile]
+      : key === "immunotherapy"
+        ? (profiles.immunotherapy[profile] ?? profiles.immunotherapy.default)
+        : key === "vaccine"
+          ? profiles.vaccine
+          : 1;
+  if (key === "targeted")
+    multiplier = player.targetedIndications.includes(profile)
+      ? profiles.targeted.indicated
+      : profiles.targeted.other;
+  if (key === "medicine" && player.completed.includes("R02"))
+    multiplier *= effects.medicineProtocols;
+  if (
+    key === "medicine" &&
+    player.completed.includes("R03") &&
+    profile === player.specialty
+  )
+    multiplier *= effects.diagnosticSpecialty;
+  if (key === "radiotherapy" && defending)
+    multiplier *= player.completed.includes("R07")
+      ? effects.radiationDefense
+      : effects.radiationDefenseBase;
   return base * multiplier;
 }
 
 export class Game {
-  constructor({ random = Math.random, id = randomUUID, matchSeconds, lobbySize = 20, placementSeconds, columns, rows, seed = randomUUID(), now = () => Date.now(), balanceVersion = BALANCE.version, balance } = {}) {
-    this.balance=balance??getBalance(balanceVersion); matchSeconds??=this.balance.match.seconds; placementSeconds??=this.balance.match.placementSeconds;
-    if (!LOBBY_SIZES[lobbySize] && (columns == null || rows == null)) throw new RangeError('lobbySize must be 20, 30, or 40');
-    const template = columns != null && rows != null ? { columns, rows } : LOBBY_SIZES[lobbySize];
-    this.random=random; this.id=id; this.now=now; this.matchSeconds=matchSeconds; this.lobbySize=lobbySize; this.placementSeconds=placementSeconds; this.elapsed=0; this.lobbyElapsed=0; this.accumulator=0; this.players=new Map();
-    this.phase=PHASES.WAITING; this.placementRemaining=placementSeconds; this.startedAt=null; this.finishedAt=null;
-    this.convoys=[]; this.arrivalReports=[]; this.routeInterruptions=[]; this.commands=[]; this.commandLog=[]; this.commandIds=new Set(); this.sequence=0; this.winner=null; this.result=null; this.holdLeader=null; this.holdSeconds=0;
-    const generated = columns == null && rows == null ? createSeededMap({ lobbySize, seed }) : null;
-    this.seed=String(seed); this.map={ ...template, seed:this.seed }; this.regions=Array.from({length:template.columns*template.rows},(_,id)=>({ id, name:`Region ${id+1}`, column:id%template.columns,row:Math.floor(id/template.columns), neighbours:generated?.regions[id].neighbours??regionNeighbours(id,template.columns,template.rows), profile:generated?.regions[id].profile??PROFILES[id%4], profilePatch:generated?.regions[id].profilePatch??null, ownerId:null, level:0, upgradeProgress:0, inventories:this.emptyInventory(), protection:this.balance.contest.neutralProtection, quietTime:0, acquiredAt:null, commissionedUntil:0, dispatchAvailableAt:0, programme:null, developmentPin:false, productionPin:false, campaigns:{} }));
-    this.pads=generated?.pads??Array.from({length:lobbySize},(_,index)=>Math.floor(index*this.regions.length/lobbySize));
-    this.contests=new Map(); this.contestEpisodes=new Map(); this.firstTreatmentOutput=new Set();
-    this.telemetry={version:1,balanceVersion:this.balance.version,events:[],companies:{},totals:{dispatches:0,routes:0,programmes:0,contestSeconds:0,redirectedFunding:0,unusedFunding:0,factoryCreditSeconds:0,treatmentOutput:Object.fromEntries(KEYS.map(k=>[k,0]))},victory:null};
-    this.boundarySnapshots=[];
+  constructor({
+    random = Math.random,
+    id = randomUUID,
+    matchSeconds,
+    lobbySize = 20,
+    placementSeconds,
+    columns,
+    rows,
+    seed = randomUUID(),
+    now = () => Date.now(),
+    balanceVersion = BALANCE.version,
+    balance,
+  } = {}) {
+    this.balance = balance ?? getBalance(balanceVersion);
+    matchSeconds ??= this.balance.match.seconds;
+    placementSeconds ??= this.balance.match.placementSeconds;
+    if (!LOBBY_SIZES[lobbySize] && (columns == null || rows == null))
+      throw new RangeError("lobbySize must be 20, 30, or 40");
+    const template =
+      columns != null && rows != null
+        ? { columns, rows }
+        : LOBBY_SIZES[lobbySize];
+    this.random = random;
+    this.id = id;
+    this.now = now;
+    this.matchSeconds = matchSeconds;
+    this.lobbySize = lobbySize;
+    this.placementSeconds = placementSeconds;
+    this.elapsed = 0;
+    this.lobbyElapsed = 0;
+    this.accumulator = 0;
+    this.players = new Map();
+    this.phase = PHASES.WAITING;
+    this.placementRemaining = placementSeconds;
+    this.startedAt = null;
+    this.finishedAt = null;
+    this.convoys = [];
+    this.arrivalReports = [];
+    this.routeInterruptions = [];
+    this.commands = [];
+    this.commandLog = [];
+    this.commandIds = new Set();
+    this.sequence = 0;
+    this.winner = null;
+    this.result = null;
+    this.holdLeader = null;
+    this.holdSeconds = 0;
+    const generated =
+      columns == null && rows == null
+        ? createSeededMap({ lobbySize, seed })
+        : null;
+    this.seed = String(seed);
+    this.map = { ...template, seed: this.seed };
+    this.regions = Array.from(
+      { length: template.columns * template.rows },
+      (_, id) => ({
+        id,
+        name: `Region ${id + 1}`,
+        column: id % template.columns,
+        row: Math.floor(id / template.columns),
+        neighbours:
+          generated?.regions[id].neighbours ??
+          regionNeighbours(id, template.columns, template.rows),
+        profile: generated?.regions[id].profile ?? PROFILES[id % 4],
+        profilePatch: generated?.regions[id].profilePatch ?? null,
+        ownerId: null,
+        level: 0,
+        upgradeProgress: 0,
+        inventories: this.emptyInventory(),
+        protection: this.balance.contest.neutralProtection,
+        quietTime: 0,
+        acquiredAt: null,
+        commissionedUntil: 0,
+        dispatchAvailableAt: 0,
+        programme: null,
+        developmentPin: false,
+        productionPin: false,
+        campaigns: {},
+      }),
+    );
+    this.pads =
+      generated?.pads ??
+      Array.from({ length: lobbySize }, (_, index) =>
+        Math.floor((index * this.regions.length) / lobbySize),
+      );
+    this.contests = new Map();
+    this.contestEpisodes = new Map();
+    this.firstTreatmentOutput = new Set();
+    this.telemetry = {
+      version: 1,
+      balanceVersion: this.balance.version,
+      events: [],
+      companies: {},
+      totals: {
+        dispatches: 0,
+        routes: 0,
+        programmes: 0,
+        contestSeconds: 0,
+        redirectedFunding: 0,
+        unusedFunding: 0,
+        factoryCreditSeconds: 0,
+        treatmentOutput: Object.fromEntries(KEYS.map((k) => [k, 0])),
+      },
+      victory: null,
+    };
+    this.boundarySnapshots = [];
   }
-  emptyInventory(){return Object.fromEntries(Object.keys(this.balance.treatments).map(key=>[key,0]));}
-  force(player,key,profile,defending=false){return treatmentForce(player,key,profile,defending,this.balance);}
+  emptyInventory() {
+    return Object.fromEntries(
+      Object.keys(this.balance.treatments).map((key) => [key, 0]),
+    );
+  }
+  force(player, key, profile, defending = false) {
+    return treatmentForce(player, key, profile, defending, this.balance);
+  }
 
-  addPlayer(name='Researcher', { bot = false, credential } = {}) {
+  addPlayer(name = "Researcher", { bot = false, credential } = {}) {
     if (this.players.size >= this.lobbySize) return null;
-    const playerId=this.id(); credential??=this.id();
-    const inventory=this.emptyInventory();
-    const p={ id:playerId,name:cleanName(name),color:`hsl(${Math.floor(this.random()*360)} 70% 58%)`,initials:'',started:false,eliminated:false,bot:false,surrendered:false,specialty:null,focus:null,
-      allocation:{...BUDGET_PRESETS.balanced},pendingAllocation:null,researchBank:0,infrastructureBank:0,revenue:0,gross:0,upkeep:0,net:0,research:0,researchQueue:[...DEFAULT_RESEARCH],researchProgress:{},completed:[],priorityAvailableAt:0,targetedIndications:[],selectedTreatment:'medicine',pendingTreatment:null,manufacturingAvailableAt:0,r05Choice:null,r05RequestedChoice:null,
-      stock:inventory,unlocked:['medicine'],commitment:this.balance.starting.commitment,filter:'all',production:0,manufacturingFunding:0,directManufacturingFunding:0,manufacturingSpend:0,unusedManufacturing:0,researchOverflow:0,infrastructureOverflow:0,overflow:0,regionSeconds:0,productionPin:null,developmentPin:null,researchActive:null,researchEta:null,infrastructureActive:null,infrastructureReason:null,infrastructureEta:null,
-      connected:!bot,disconnectedAt:null,nextBotAt:(this.players.size%this.balance.bots.initialStaggerSlots)*this.balance.match.step,botSlot:this.players.size,botAction:null,programmeObjective:null,researchSpend:0,infrastructureSpend:0,manufacturingSpend:0,credential,spectator:false };
-    p.bot=bot;
-    p.initials=p.name.split(/\s+/).map(x=>x[0]).join('').slice(0,2).toUpperCase(); this.players.set(p.id,p); return p;
+    const playerId = this.id();
+    credential ??= this.id();
+    const inventory = this.emptyInventory();
+    const p = {
+      id: playerId,
+      name: cleanName(name),
+      color: `hsl(${Math.floor(this.random() * 360)} 70% 58%)`,
+      initials: "",
+      started: false,
+      eliminated: false,
+      bot: false,
+      surrendered: false,
+      specialty: null,
+      focus: null,
+      allocation: { ...BUDGET_PRESETS.balanced },
+      pendingAllocation: null,
+      researchBank: 0,
+      infrastructureBank: 0,
+      revenue: 0,
+      gross: 0,
+      upkeep: 0,
+      net: 0,
+      research: 0,
+      researchQueue: [...DEFAULT_RESEARCH],
+      researchProgress: {},
+      completed: [],
+      priorityAvailableAt: 0,
+      targetedIndications: [],
+      selectedTreatment: "medicine",
+      pendingTreatment: null,
+      manufacturingAvailableAt: 0,
+      r05Choice: null,
+      r05RequestedChoice: null,
+      stock: inventory,
+      unlocked: ["medicine"],
+      commitment: this.balance.starting.commitment,
+      filter: "all",
+      production: 0,
+      manufacturingFunding: 0,
+      directManufacturingFunding: 0,
+      manufacturingSpend: 0,
+      unusedManufacturing: 0,
+      researchOverflow: 0,
+      infrastructureOverflow: 0,
+      overflow: 0,
+      regionSeconds: 0,
+      productionPin: null,
+      developmentPin: null,
+      researchActive: null,
+      researchEta: null,
+      infrastructureActive: null,
+      infrastructureReason: null,
+      infrastructureEta: null,
+      connected: !bot,
+      disconnectedAt: null,
+      nextBotAt:
+        (this.players.size % this.balance.bots.initialStaggerSlots) *
+        this.balance.match.step,
+      botSlot: this.players.size,
+      botAction: null,
+      programmeObjective: null,
+      researchSpend: 0,
+      infrastructureSpend: 0,
+      manufacturingSpend: 0,
+      credential,
+      spectator: false,
+    };
+    p.bot = bot;
+    p.initials = p.name
+      .split(/\s+/)
+      .map((x) => x[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase();
+    this.players.set(p.id, p);
+    return p;
   }
-  connect(name='Researcher') {
-    if (this.phase===PHASES.ACTIVE||this.phase===PHASES.FINISHED||this.players.size>=this.lobbySize) return { spectator:true, player:null, credential:null };
-    const player=this.addPlayer(name); if(this.phase===PHASES.WAITING){this.phase=PHASES.PLACEMENT;this.placementRemaining=this.placementSeconds;} return { spectator:false,player,credential:player.credential };
+  connect(name = "Researcher") {
+    if (
+      this.phase === PHASES.ACTIVE ||
+      this.phase === PHASES.FINISHED ||
+      this.players.size >= this.lobbySize
+    )
+      return { spectator: true, player: null, credential: null };
+    const player = this.addPlayer(name);
+    if (this.phase === PHASES.WAITING) {
+      this.phase = PHASES.PLACEMENT;
+      this.placementRemaining = this.placementSeconds;
+    }
+    return { spectator: false, player, credential: player.credential };
   }
-  reconnect(credential){const p=[...this.players.values()].find(x=>x.credential===credential);if(!p||!this.reconnectPlayer(p.id))return null;return p;}
-  removePlayer(id) { const p=this.players.get(id); if (!p) return false; p.connected=false;p.disconnectedAt=this.elapsed;return true; }
-  reconnectPlayer(id) { const p=this.players.get(id);if(!p||p.surrendered)return false;p.connected=true;p.disconnectedAt=null;p.bot=false;return true; }
-  renamePlayer(p,name){p.name=cleanName(name);p.initials=p.name.slice(0,2).toUpperCase();return true;}
-  adjacent(a,b){ return Boolean(this.regions[Number(a)]?.neighbours.includes(Number(b))); }
-  owned(p){return this.regions.filter(r=>r.ownerId===p.id);}
-  unlocks(p){return ['medicine',...(p.completed.includes('R06')?['radiotherapy']:[]),...(p.completed.includes('R04')?['targeted']:[]),...(p.completed.includes('R08')?['immunotherapy']:[]),...(p.completed.includes('R09')?['vaccine']:[])];}
+  reconnect(credential) {
+    const p = [...this.players.values()].find(
+      (x) => x.credential === credential,
+    );
+    if (!p || !this.reconnectPlayer(p.id)) return null;
+    return p;
+  }
+  removePlayer(id) {
+    const p = this.players.get(id);
+    if (!p) return false;
+    p.connected = false;
+    p.disconnectedAt = this.elapsed;
+    return true;
+  }
+  reconnectPlayer(id) {
+    const p = this.players.get(id);
+    if (!p || p.surrendered) return false;
+    p.connected = true;
+    p.disconnectedAt = null;
+    p.bot = false;
+    return true;
+  }
+  renamePlayer(p, name) {
+    p.name = cleanName(name);
+    p.initials = p.name.slice(0, 2).toUpperCase();
+    return true;
+  }
+  adjacent(a, b) {
+    return Boolean(this.regions[Number(a)]?.neighbours.includes(Number(b)));
+  }
+  owned(p) {
+    return this.regions.filter((r) => r.ownerId === p.id);
+  }
+  unlocks(p) {
+    return [
+      "medicine",
+      ...(p.completed.includes("R06") ? ["radiotherapy"] : []),
+      ...(p.completed.includes("R04") ? ["targeted"] : []),
+      ...(p.completed.includes("R08") ? ["immunotherapy"] : []),
+      ...(p.completed.includes("R09") ? ["vaccine"] : []),
+    ];
+  }
 
-  handle(id,message,receivedAt=this.now()){ const p=this.players.get(id); if(!p||!message||typeof message!=='object')return this.reject('invalid_command');
-    if(typeof message.commandId!=='string'||!message.commandId.trim())return this.reject('missing_command_id');
-    if(this.commandIds.has(`${id}:${message.commandId}`))return this.rejectLogged(id,message,receivedAt,'duplicate_command');this.commandIds.add(`${id}:${message.commandId}`);
-    if(this.phase===PHASES.FINISHED)return this.rejectLogged(id,message,receivedAt,'match_finished');
-    const actions={join:()=>this.renamePlayer(p,message.name),start:()=>this.start(p,message.regionId,message.specialty),allocate:()=>this.allocate(p,message.allocation),budget:()=>this.changeBudget(p,message.category,message.value),budgetPreset:()=>this.applyBudgetPreset(p,message.preset),selectTreatment:()=>this.selectTreatment(p,message.treatment),dispatchPreferences:()=>this.setDispatchPreferences(p,message.commitment,message.filter),contest:()=>this.dispatch(p,message.fromId,message.toId,message.commitment,message.filter),dispatch:()=>this.dispatch(p,message.fromId,message.toId,message.commitment,message.filter),withdraw:()=>this.withdraw(p,message.regionId,message.toId),research:()=>this.prioritizeResearch(p,message.project,message.indication),programme:()=>this.activateProgramme(p,message.regionId),pin:()=>this.setPin(p,message.kind,message.regionId),surrender:()=>{p.surrendered=true;p.bot=true;return true;}};
-    const placement=message.type==='start', lobby=message.type==='join';
-    if(placement&&this.phase!==PHASES.PLACEMENT)return this.rejectLogged(id,message,receivedAt,'invalid_phase');
-    if(!placement&&!lobby&&this.phase!==PHASES.ACTIVE)return this.rejectLogged(id,message,receivedAt,'invalid_phase');
-    if((p.eliminated||p.bot)&&!lobby)return this.rejectLogged(id,message,receivedAt,'not_human_controlled');
-    if(lobby)return actions.join();
-    const envelope={companyId:id,commandId:message.commandId,receivedAt,sequence:++this.sequence,message:{...message},status:'accepted'};
-    this.commands.push(envelope);this.commandLog.push(envelope);return true;
+  handle(id, message, receivedAt = this.now()) {
+    const p = this.players.get(id);
+    if (!p || !message || typeof message !== "object")
+      return this.reject("invalid_command");
+    if (typeof message.commandId !== "string" || !message.commandId.trim())
+      return this.reject("missing_command_id");
+    if (this.commandIds.has(`${id}:${message.commandId}`))
+      return this.rejectLogged(id, message, receivedAt, "duplicate_command");
+    this.commandIds.add(`${id}:${message.commandId}`);
+    if (this.phase === PHASES.FINISHED)
+      return this.rejectLogged(id, message, receivedAt, "match_finished");
+    const actions = {
+      join: () => this.renamePlayer(p, message.name),
+      start: () => this.start(p, message.regionId, message.specialty),
+      allocate: () => this.allocate(p, message.allocation),
+      budget: () => this.changeBudget(p, message.category, message.value),
+      budgetPreset: () => this.applyBudgetPreset(p, message.preset),
+      selectTreatment: () => this.selectTreatment(p, message.treatment),
+      dispatchPreferences: () =>
+        this.setDispatchPreferences(p, message.commitment, message.filter),
+      contest: () =>
+        this.dispatch(
+          p,
+          message.fromId,
+          message.toId,
+          message.commitment,
+          message.filter,
+        ),
+      dispatch: () =>
+        this.dispatch(
+          p,
+          message.fromId,
+          message.toId,
+          message.commitment,
+          message.filter,
+        ),
+      withdraw: () => this.withdraw(p, message.regionId, message.toId),
+      research: () =>
+        this.prioritizeResearch(p, message.project, message.indication),
+      programme: () => this.activateProgramme(p, message.regionId),
+      pin: () => this.setPin(p, message.kind, message.regionId),
+      surrender: () => {
+        p.surrendered = true;
+        p.bot = true;
+        return true;
+      },
+    };
+    const placement = message.type === "start",
+      lobby = message.type === "join";
+    if (placement && this.phase !== PHASES.PLACEMENT)
+      return this.rejectLogged(id, message, receivedAt, "invalid_phase");
+    if (!placement && !lobby && this.phase !== PHASES.ACTIVE)
+      return this.rejectLogged(id, message, receivedAt, "invalid_phase");
+    if ((p.eliminated || p.bot) && !lobby)
+      return this.rejectLogged(id, message, receivedAt, "not_human_controlled");
+    if (lobby) return actions.join();
+    const envelope = {
+      companyId: id,
+      commandId: message.commandId,
+      receivedAt,
+      sequence: ++this.sequence,
+      message: { ...message },
+      status: "accepted",
+    };
+    this.commands.push(envelope);
+    this.commandLog.push(envelope);
+    return true;
   }
-  reject(reason){this.lastRejection=reason;return false;}
-  rejectLogged(companyId,message,receivedAt,reason){this.lastRejection=reason;this.commandLog.push({companyId,commandId:message.commandId,receivedAt,sequence:++this.sequence,type:message.type,status:'rejected',reason,processedAt:this.phase===PHASES.ACTIVE?this.elapsed:this.lobbyElapsed});return false;}
-  start(p,id,specialty,requirePad=false){const r=this.regions[Number(id)];if(p.started||!r||r.ownerId!==null||(requirePad&&!this.pads.includes(r.id)))return this.reject('invalid_start');r.ownerId=p.id;r.level=this.balance.starting.level;r.protection=this.balance.starting.protection;r.inventories.medicine=this.balance.starting.medicine;r.acquiredAt=this.elapsed;p.started=true;p.initialRegionId=r.id;p.specialty=PROFILES.includes(specialty)?specialty:r.profile;p.focus=p.specialty;if(!requirePad&&this.phase===PHASES.WAITING){this.phase=PHASES.ACTIVE;this.startedAt=this.now();}return true;}
-  allocate(p,a){if(!a||Object.keys(a).length!==3||!['research','manufacturing','infrastructure'].every(k=>finite(a[k])&&Number(a[k])%this.balance.budgets.increment===0&&Number(a[k])>=0))return this.reject('invalid_budget');const values=Object.values(a).map(Number);if(values.reduce((x,y)=>x+y,0)!==100)return this.reject('invalid_budget_total');p.pendingAllocation={research:+a.research,manufacturing:+a.manufacturing,infrastructure:+a.infrastructure};return true;}
-  changeBudget(p,category,value){const allocation=redistributeBudget(p.pendingAllocation??p.allocation,category,Number(value));return allocation?this.allocate(p,allocation):this.reject('invalid_budget');}
-  applyBudgetPreset(p,name){const preset=BUDGET_PRESETS[name];return preset?this.allocate(p,preset):this.reject('invalid_budget_preset');}
-  transitionTreatment(p,key,reject=true){if(!this.unlocks(p).includes(key))return reject?this.reject('locked_treatment'):false;if(p.pendingTreatment||this.elapsed<p.manufacturingAvailableAt)return reject?this.reject('manufacturing_switching'):false;if(p.selectedTreatment===key)return true;p.pendingTreatment=key;p.manufacturingAvailableAt=this.elapsed+this.balance.movement.treatmentSwitchSeconds;return true;}
-  selectTreatment(p,key){return this.transitionTreatment(p,key);}
-  path(from,to,owner){const queue=[[from]],seen=new Set([from]);while(queue.length){const path=queue.shift(),last=path.at(-1);if(last===to)return path;for(const n of this.regions[last].neighbours)if(!seen.has(n)&&(n===to||this.regions[n].ownerId===owner)){seen.add(n);queue.push([...path,n]);}}return null;}
-  setDispatchPreferences(p,commitment=p.commitment,filter=p.filter){const percent=Number(commitment);if(!finite(percent)||percent<this.balance.movement.commitmentMinimum||percent>this.balance.movement.commitmentMaximum||percent%this.balance.movement.commitmentIncrement)return this.reject('invalid_commitment');if(filter!=='all'&&!KEYS.includes(filter))return this.reject('invalid_filter');p.commitment=percent;p.filter=filter;return true;}
-  dispatch(p,fromId,toId,commitment=p.commitment,filter=p.filter){
-    const from=this.regions[Number(fromId)],to=this.regions[Number(toId)],percent=Number(commitment);if(!p.started||p.eliminated||!from||!to||from.ownerId!==p.id)return this.reject('unauthorized_source');if(!finite(percent)||percent<this.balance.movement.commitmentMinimum||percent>this.balance.movement.commitmentMaximum||percent%this.balance.movement.commitmentIncrement)return this.reject('invalid_commitment');if(this.elapsed<from.dispatchAvailableAt)return this.reject('dispatch_cooldown');if(this.convoys.filter(c=>c.companyId===p.id).length>=this.balance.movement.convoySlots)return this.reject('convoy_limit');
-    const path=to.ownerId===p.id?this.path(from.id,to.id,p.id):(this.adjacent(from.id,to.id)?[from.id,to.id]:null);if(!path||path.length<2)return this.reject('no_route');
-    const chosen=filter==='all'?KEYS:[filter];if(!chosen.every(k=>KEYS.includes(k)))return this.reject('invalid_filter');const supply=this.emptyInventory();for(const k of chosen)supply[k]=from.inventories[k]*percent/100;const capacity=KEYS.reduce((s,k)=>s+supply[k]*this.balance.treatments[k].cost,0);if(capacity<this.balance.movement.minimumPacket)return this.reject('packet_too_small');if(to.ownerId!==p.id){const foreign=this.foreignTargets(p);const reserved=Math.min(this.balance.movement.foreignMaxSlots,this.balance.movement.foreignBaseSlots+Math.floor(this.owned(p).length/this.balance.movement.foreignSlotRegions));if(!foreign.has(to.id)&&foreign.size>=reserved)return this.reject('foreign_target_limit');if(this.targetCommitment(p.id,to.id)+capacity>this.balance.movement.targetCapacity)return this.reject('target_capacity');}
-    for(const k of KEYS)from.inventories[k]-=supply[k];const slow=Math.max(...chosen.filter(k=>supply[k]>0).map(k=>this.balance.treatments[k].edgeTime));const edgeTime=slow*(p.completed.includes('R11')?this.balance.researchEffects.logistics:1),launchForce=KEYS.reduce((s,k)=>s+supply[k]*this.force(p,k,to.profile),0),defense=this.defenderForce(to),route=path.length-1;this.convoys.push({id:this.id(),companyId:p.id,sourceId:from.id,targetId:to.id,path,index:0,supply,capacity,edgeTime,dueAt:this.elapsed+edgeTime,createdAt:this.elapsed});from.dispatchAvailableAt=this.elapsed+this.balance.movement.dispatchCooldown;this.recordTelemetry('dispatch',p,{fromId:from.id,toId:to.id,targetOwnerId:to.ownerId,capacity,route,launchForceRatio:defense?launchForce/defense:null});this.telemetry.totals.dispatches++;this.telemetry.totals.routes+=route;this.companyTelemetry(p).dispatches++;return true;
+  reject(reason) {
+    this.lastRejection = reason;
+    return false;
   }
-  foreignTargets(p){const targets=new Set(this.convoys.filter(c=>c.companyId===p.id&&this.regions[c.targetId]?.ownerId!==p.id).map(c=>c.targetId));for(const r of this.regions)if(r.ownerId!==p.id&&r.campaigns[p.id])targets.add(r.id);return targets;}
-  targetCommitment(companyId,targetId){let total=this.convoys.filter(c=>c.companyId===companyId&&c.targetId===targetId).reduce((s,c)=>s+c.capacity,0);const campaign=this.regions[targetId]?.campaigns[companyId];if(campaign)total+=KEYS.reduce((s,k)=>s+campaign[k]*this.balance.treatments[k].cost,0);return total;}
-  contest(p,from,to,commitment){return this.dispatch(p,from,to,commitment,p.selectedTreatment);}
-  withdraw(p,regionId,toId){const r=this.regions[Number(regionId)],to=this.regions[Number(toId)],campaign=r?.campaigns[p.id];if(!campaign||to?.ownerId!==p.id||!this.adjacent(r.id,to.id))return this.reject('invalid_withdrawal');if(this.convoys.filter(c=>c.companyId===p.id).length>=this.balance.movement.convoySlots)return this.reject('convoy_limit');const supply=this.emptyInventory();for(const k of KEYS)supply[k]=campaign[k]*this.balance.movement.withdrawalRetained;const edgeTime=(Math.max(...KEYS.filter(k=>supply[k]>0).map(k=>this.balance.treatments[k].edgeTime))||3)*(p.completed.includes('R11')?this.balance.researchEffects.logistics:1);const capacity=KEYS.reduce((s,k)=>s+supply[k]*this.balance.treatments[k].cost,0);delete r.campaigns[p.id];this.convoys.push({id:this.id(),companyId:p.id,sourceId:r.id,targetId:to.id,path:[r.id,to.id],index:0,supply,capacity,edgeTime,dueAt:this.elapsed+edgeTime,createdAt:this.elapsed});return true;}
-  prioritizeResearch(p,id,indication){if(!this.balance.research[id]||p.completed.includes(id)||this.elapsed<p.priorityAvailableAt)return this.reject('invalid_research_priority');if(indication!=null){if(id!=='R05'||p.r05Choice||!PROFILES.includes(indication)||indication===p.specialty)return this.reject('invalid_r05_indication');p.r05RequestedChoice=indication;}const chain=[];let x=id;while(x&&!p.completed.includes(x)){chain.unshift(x);x=this.balance.research[x][1];}p.researchQueue=[...chain,...p.researchQueue.filter(q=>!chain.includes(q)&&!p.completed.includes(q))];p.priorityAvailableAt=this.elapsed+this.balance.movement.researchPrioritySeconds;return true;}
-  activateProgramme(p,id){const r=this.regions[Number(id)];if(!p.completed.includes('R09'))return this.reject('programme_locked');if(r?.ownerId!==p.id)return this.reject('programme_not_owned');if(r.programme)return this.reject('programme_unavailable');if(r.inventories.vaccine<this.balance.programme.vaccineUnits)return this.reject('programme_needs_10_vac');r.inventories.vaccine-=this.balance.programme.vaccineUnits;r.programme={pending:true,companyId:p.id,startedAt:this.elapsed,completesAt:this.elapsed+this.balance.programme.pendingSeconds,expiresAt:null,scheduledExpiryAt:null,protection:0,maxProtection:0};this.recordTelemetry('programme',p,{regionId:r.id});this.telemetry.totals.programmes++;this.companyTelemetry(p).programmes++;return true;}
-  setPin(p,kind,id){const r=this.regions[Number(id)];if(r?.ownerId!==p.id)return this.reject('pin_region_not_owned');if(!['production','development'].includes(kind))return this.reject('invalid_pin_kind');p[`${kind}Pin`]=p[`${kind}Pin`]===r.id?null:r.id;return true;}
+  rejectLogged(companyId, message, receivedAt, reason) {
+    this.lastRejection = reason;
+    this.commandLog.push({
+      companyId,
+      commandId: message.commandId,
+      receivedAt,
+      sequence: ++this.sequence,
+      type: message.type,
+      status: "rejected",
+      reason,
+      processedAt:
+        this.phase === PHASES.ACTIVE ? this.elapsed : this.lobbyElapsed,
+    });
+    return false;
+  }
+  start(p, id, specialty, requirePad = false) {
+    const r = this.regions[Number(id)];
+    if (
+      p.started ||
+      !r ||
+      r.ownerId !== null ||
+      (requirePad && !this.pads.includes(r.id))
+    )
+      return this.reject("invalid_start");
+    r.ownerId = p.id;
+    r.level = this.balance.starting.level;
+    r.protection = this.balance.starting.protection;
+    r.inventories.medicine = this.balance.starting.medicine;
+    r.acquiredAt = this.elapsed;
+    p.started = true;
+    p.initialRegionId = r.id;
+    p.specialty = PROFILES.includes(specialty) ? specialty : r.profile;
+    p.focus = p.specialty;
+    if (!requirePad && this.phase === PHASES.WAITING) {
+      this.phase = PHASES.ACTIVE;
+      this.startedAt = this.now();
+    }
+    return true;
+  }
+  allocate(p, a) {
+    if (
+      !a ||
+      Object.keys(a).length !== 3 ||
+      !["research", "manufacturing", "infrastructure"].every(
+        (k) =>
+          finite(a[k]) &&
+          Number(a[k]) % this.balance.budgets.increment === 0 &&
+          Number(a[k]) >= 0,
+      )
+    )
+      return this.reject("invalid_budget");
+    const values = Object.values(a).map(Number);
+    if (values.reduce((x, y) => x + y, 0) !== 100)
+      return this.reject("invalid_budget_total");
+    p.pendingAllocation = {
+      research: +a.research,
+      manufacturing: +a.manufacturing,
+      infrastructure: +a.infrastructure,
+    };
+    return true;
+  }
+  changeBudget(p, category, value) {
+    const allocation = redistributeBudget(
+      p.pendingAllocation ?? p.allocation,
+      category,
+      Number(value),
+    );
+    return allocation
+      ? this.allocate(p, allocation)
+      : this.reject("invalid_budget");
+  }
+  applyBudgetPreset(p, name) {
+    const preset = BUDGET_PRESETS[name];
+    return preset
+      ? this.allocate(p, preset)
+      : this.reject("invalid_budget_preset");
+  }
+  transitionTreatment(p, key, reject = true) {
+    if (!this.unlocks(p).includes(key))
+      return reject ? this.reject("locked_treatment") : false;
+    if (p.pendingTreatment || this.elapsed < p.manufacturingAvailableAt)
+      return reject ? this.reject("manufacturing_switching") : false;
+    if (p.selectedTreatment === key) return true;
+    p.pendingTreatment = key;
+    p.manufacturingAvailableAt =
+      this.elapsed + this.balance.movement.treatmentSwitchSeconds;
+    return true;
+  }
+  selectTreatment(p, key) {
+    return this.transitionTreatment(p, key);
+  }
+  path(from, to, owner) {
+    const queue = [[from]],
+      seen = new Set([from]);
+    while (queue.length) {
+      const path = queue.shift(),
+        last = path.at(-1);
+      if (last === to) return path;
+      for (const n of this.regions[last].neighbours)
+        if (!seen.has(n) && (n === to || this.regions[n].ownerId === owner)) {
+          seen.add(n);
+          queue.push([...path, n]);
+        }
+    }
+    return null;
+  }
+  setDispatchPreferences(p, commitment = p.commitment, filter = p.filter) {
+    const percent = Number(commitment);
+    if (
+      !finite(percent) ||
+      percent < this.balance.movement.commitmentMinimum ||
+      percent > this.balance.movement.commitmentMaximum ||
+      percent % this.balance.movement.commitmentIncrement
+    )
+      return this.reject("invalid_commitment");
+    if (filter !== "all" && !KEYS.includes(filter))
+      return this.reject("invalid_filter");
+    p.commitment = percent;
+    p.filter = filter;
+    return true;
+  }
+  dispatch(p, fromId, toId, commitment = p.commitment, filter = p.filter) {
+    const from = this.regions[Number(fromId)],
+      to = this.regions[Number(toId)],
+      percent = Number(commitment);
+    if (!p.started || p.eliminated || !from || !to || from.ownerId !== p.id)
+      return this.reject("unauthorized_source");
+    if (
+      !finite(percent) ||
+      percent < this.balance.movement.commitmentMinimum ||
+      percent > this.balance.movement.commitmentMaximum ||
+      percent % this.balance.movement.commitmentIncrement
+    )
+      return this.reject("invalid_commitment");
+    if (this.elapsed < from.dispatchAvailableAt)
+      return this.reject("dispatch_cooldown");
+    if (
+      this.convoys.filter((c) => c.companyId === p.id).length >=
+      this.balance.movement.convoySlots
+    )
+      return this.reject("convoy_limit");
+    const path =
+      to.ownerId === p.id
+        ? this.path(from.id, to.id, p.id)
+        : this.adjacent(from.id, to.id)
+          ? [from.id, to.id]
+          : null;
+    if (!path || path.length < 2) return this.reject("no_route");
+    const chosen = filter === "all" ? KEYS : [filter];
+    if (!chosen.every((k) => KEYS.includes(k)))
+      return this.reject("invalid_filter");
+    const supply = this.emptyInventory();
+    for (const k of chosen) supply[k] = (from.inventories[k] * percent) / 100;
+    const capacity = KEYS.reduce(
+      (s, k) => s + supply[k] * this.balance.treatments[k].cost,
+      0,
+    );
+    if (capacity < this.balance.movement.minimumPacket)
+      return this.reject("packet_too_small");
+    if (to.ownerId !== p.id) {
+      const foreign = this.foreignTargets(p);
+      const reserved = Math.min(
+        this.balance.movement.foreignMaxSlots,
+        this.balance.movement.foreignBaseSlots +
+          Math.floor(
+            this.owned(p).length / this.balance.movement.foreignSlotRegions,
+          ),
+      );
+      if (!foreign.has(to.id) && foreign.size >= reserved)
+        return this.reject("foreign_target_limit");
+      if (
+        this.targetCommitment(p.id, to.id) + capacity >
+        this.balance.movement.targetCapacity
+      )
+        return this.reject("target_capacity");
+    }
+    for (const k of KEYS) from.inventories[k] -= supply[k];
+    const slow = Math.max(
+      ...chosen
+        .filter((k) => supply[k] > 0)
+        .map((k) => this.balance.treatments[k].edgeTime),
+    );
+    const edgeTime =
+        slow *
+        (p.completed.includes("R11")
+          ? this.balance.researchEffects.logistics
+          : 1),
+      launchForce = KEYS.reduce(
+        (s, k) => s + supply[k] * this.force(p, k, to.profile),
+        0,
+      ),
+      defense = this.defenderForce(to),
+      route = path.length - 1;
+    this.convoys.push({
+      id: this.id(),
+      companyId: p.id,
+      sourceId: from.id,
+      targetId: to.id,
+      path,
+      index: 0,
+      supply,
+      capacity,
+      edgeTime,
+      dueAt: this.elapsed + edgeTime,
+      createdAt: this.elapsed,
+    });
+    from.dispatchAvailableAt =
+      this.elapsed + this.balance.movement.dispatchCooldown;
+    this.recordTelemetry("dispatch", p, {
+      fromId: from.id,
+      toId: to.id,
+      targetOwnerId: to.ownerId,
+      capacity,
+      route,
+      launchForceRatio: defense ? launchForce / defense : null,
+    });
+    this.telemetry.totals.dispatches++;
+    this.telemetry.totals.routes += route;
+    this.companyTelemetry(p).dispatches++;
+    return true;
+  }
+  foreignTargets(p) {
+    const targets = new Set(
+      this.convoys
+        .filter(
+          (c) =>
+            c.companyId === p.id && this.regions[c.targetId]?.ownerId !== p.id,
+        )
+        .map((c) => c.targetId),
+    );
+    for (const r of this.regions)
+      if (r.ownerId !== p.id && r.campaigns[p.id]) targets.add(r.id);
+    return targets;
+  }
+  targetCommitment(companyId, targetId) {
+    let total = this.convoys
+      .filter((c) => c.companyId === companyId && c.targetId === targetId)
+      .reduce((s, c) => s + c.capacity, 0);
+    const campaign = this.regions[targetId]?.campaigns[companyId];
+    if (campaign)
+      total += KEYS.reduce(
+        (s, k) => s + campaign[k] * this.balance.treatments[k].cost,
+        0,
+      );
+    return total;
+  }
+  contest(p, from, to, commitment) {
+    return this.dispatch(p, from, to, commitment, p.selectedTreatment);
+  }
+  withdraw(p, regionId, toId) {
+    const r = this.regions[Number(regionId)],
+      to = this.regions[Number(toId)],
+      campaign = r?.campaigns[p.id];
+    if (!campaign || to?.ownerId !== p.id || !this.adjacent(r.id, to.id))
+      return this.reject("invalid_withdrawal");
+    if (
+      this.convoys.filter((c) => c.companyId === p.id).length >=
+      this.balance.movement.convoySlots
+    )
+      return this.reject("convoy_limit");
+    const supply = this.emptyInventory();
+    for (const k of KEYS)
+      supply[k] = campaign[k] * this.balance.movement.withdrawalRetained;
+    const edgeTime =
+      (Math.max(
+        ...KEYS.filter((k) => supply[k] > 0).map(
+          (k) => this.balance.treatments[k].edgeTime,
+        ),
+      ) || 3) *
+      (p.completed.includes("R11")
+        ? this.balance.researchEffects.logistics
+        : 1);
+    const capacity = KEYS.reduce(
+      (s, k) => s + supply[k] * this.balance.treatments[k].cost,
+      0,
+    );
+    delete r.campaigns[p.id];
+    this.convoys.push({
+      id: this.id(),
+      companyId: p.id,
+      sourceId: r.id,
+      targetId: to.id,
+      path: [r.id, to.id],
+      index: 0,
+      supply,
+      capacity,
+      edgeTime,
+      dueAt: this.elapsed + edgeTime,
+      createdAt: this.elapsed,
+    });
+    return true;
+  }
+  prioritizeResearch(p, id, indication) {
+    if (
+      !this.balance.research[id] ||
+      p.completed.includes(id) ||
+      this.elapsed < p.priorityAvailableAt
+    )
+      return this.reject("invalid_research_priority");
+    if (indication != null) {
+      if (
+        id !== "R05" ||
+        p.r05Choice ||
+        !PROFILES.includes(indication) ||
+        indication === p.specialty
+      )
+        return this.reject("invalid_r05_indication");
+      p.r05RequestedChoice = indication;
+    }
+    const chain = [];
+    let x = id;
+    while (x && !p.completed.includes(x)) {
+      chain.unshift(x);
+      x = this.balance.research[x][1];
+    }
+    p.researchQueue = [
+      ...chain,
+      ...p.researchQueue.filter(
+        (q) => !chain.includes(q) && !p.completed.includes(q),
+      ),
+    ];
+    p.priorityAvailableAt =
+      this.elapsed + this.balance.movement.researchPrioritySeconds;
+    return true;
+  }
+  activateProgramme(p, id) {
+    const r = this.regions[Number(id)];
+    if (!p.completed.includes("R09")) return this.reject("programme_locked");
+    if (r?.ownerId !== p.id) return this.reject("programme_not_owned");
+    if (r.programme) return this.reject("programme_unavailable");
+    if (r.inventories.vaccine < this.balance.programme.vaccineUnits)
+      return this.reject("programme_needs_10_vac");
+    r.inventories.vaccine -= this.balance.programme.vaccineUnits;
+    r.programme = {
+      pending: true,
+      companyId: p.id,
+      startedAt: this.elapsed,
+      completesAt: this.elapsed + this.balance.programme.pendingSeconds,
+      expiresAt: null,
+      scheduledExpiryAt: null,
+      protection: 0,
+      maxProtection: 0,
+    };
+    this.recordTelemetry("programme", p, { regionId: r.id });
+    this.telemetry.totals.programmes++;
+    this.companyTelemetry(p).programmes++;
+    return true;
+  }
+  setPin(p, kind, id) {
+    const r = this.regions[Number(id)];
+    if (r?.ownerId !== p.id) return this.reject("pin_region_not_owned");
+    if (!["production", "development"].includes(kind))
+      return this.reject("invalid_pin_kind");
+    p[`${kind}Pin`] = p[`${kind}Pin`] === r.id ? null : r.id;
+    return true;
+  }
 
-  recordTelemetry(type,player,data={}){const actor=!player?'simulation':player.bot?(player.surrendered?'surrender-policy':'bot-policy-'+(player.botSlot%3)):'human';const event={type,at:this.elapsed,companyId:player?.id??null,actor,...data};this.telemetry.events.push(event);if(this.telemetry.events.length>5000)this.telemetry.events.shift();return event;}
-  companyTelemetry(p){return this.telemetry.companies[p.id]??=( {regionSeconds:0,research:0,completedResearch:0,treatmentOutput:Object.fromEntries(KEYS.map(k=>[k,0])),factoryCreditSeconds:0,redirectedFunding:0,unusedFunding:0,dispatches:0,programmes:0,eliminatedAt:null} );}
-  replayBoundary(){const state={phase:this.phase,result:this.result,players:[...this.players.values()].map(p=>({id:p.id,regions:this.owned(p).map(r=>r.id),research:p.research,completed:p.completed,allocation:p.allocation,selectedTreatment:p.selectedTreatment,regionSeconds:p.regionSeconds,eliminated:p.eliminated})),regions:this.regions.map(r=>({ownerId:r.ownerId,level:r.level,upgradeProgress:r.upgradeProgress,protection:r.protection,inventories:r.inventories,campaigns:r.campaigns,programme:r.programme})),convoys:this.convoys.map(c=>({companyId:c.companyId,sourceId:c.sourceId,targetId:c.targetId,path:c.path,index:c.index,supply:c.supply,dueAt:c.dueAt}))};return {at:this.elapsed,digest:createHash('sha256').update(JSON.stringify(state)).digest('hex')};}
-  exportReplay(){return {format:1,step:this.balance.match.step,seed:this.seed,balanceVersion:this.balance.version,lobbySize:this.lobbySize,matchSeconds:this.matchSeconds,placementSeconds:this.placementSeconds,columns:this.map.columns,rows:this.map.rows,companies:[...this.players.values()].map(p=>({id:p.id,name:p.name,bot:p.bot&&!p.surrendered,botSlot:p.botSlot,initialRegionId:p.initialRegionId,specialty:p.specialty})),commands:this.commandLog.filter(x=>x.status==='applied').map(x=>({companyId:x.companyId,processedAt:x.processedAt,message:x.message})),boundaries:this.boundarySnapshots.map(boundary=>({...boundary})),result:this.result};}
-  tick(seconds=this.balance.match.step){if(this.phase===PHASES.FINISHED)return;this.accumulator+=clamp(Number(seconds)||0,0,this.balance.match.maxTickSeconds);while(this.accumulator+1e-9>=this.balance.match.step&&this.phase!==PHASES.FINISHED){this.step();this.accumulator-=this.balance.match.step;}}
-  processCommands(){const queued=this.commands.splice(0).sort((a,b)=>a.sequence-b.sequence);for(const envelope of queued){const p=this.players.get(envelope.companyId),m=envelope.message;let ok=false;if(!p) this.lastRejection='unknown_company';else if(m.type==='start')ok=this.phase===PHASES.PLACEMENT&&this.start(p,m.regionId,m.specialty,true);else if(this.phase!==PHASES.ACTIVE)this.lastRejection='invalid_phase';else if(p.eliminated||p.bot)this.lastRejection='not_human_controlled';else {const actions={allocate:()=>this.allocate(p,m.allocation),budget:()=>this.changeBudget(p,m.category,m.value),budgetPreset:()=>this.applyBudgetPreset(p,m.preset),selectTreatment:()=>this.selectTreatment(p,m.treatment),dispatchPreferences:()=>this.setDispatchPreferences(p,m.commitment,m.filter),contest:()=>this.dispatch(p,m.fromId,m.toId,m.commitment,m.filter),dispatch:()=>this.dispatch(p,m.fromId,m.toId,m.commitment,m.filter),withdraw:()=>this.withdraw(p,m.regionId,m.toId),research:()=>this.prioritizeResearch(p,m.project,m.indication),programme:()=>this.activateProgramme(p,m.regionId),pin:()=>this.setPin(p,m.kind,m.regionId),surrender:()=>{p.surrendered=true;p.bot=true;return true;}};ok=actions[m.type]?.()??this.reject('unknown_command');}envelope.status=ok?'applied':'rejected';envelope.processedAt=this.phase===PHASES.ACTIVE?this.elapsed:this.lobbyElapsed;envelope.reason=ok?null:this.lastRejection;if(ok)this.recordTelemetry('decision',p,{command:m.type,commandId:m.commandId});}}
-  beginMatch(){const vacant=this.lobbySize-this.players.size;for(let i=0;i<vacant;i++)this.addPlayer(`Automated ${String(i+1).padStart(2,'0')}`,{bot:true});const freePads=this.pads.filter(id=>this.regions[id].ownerId===null);const unplaced=[...this.players.values()].filter(p=>!p.started).sort((a,b)=>a.id.localeCompare(b.id));unplaced.forEach((p,index)=>this.start(p,freePads[index]));this.phase=PHASES.ACTIVE;this.elapsed=0;this.startedAt=this.now();}
+  recordTelemetry(type, player, data = {}) {
+    const actor = !player
+      ? "simulation"
+      : player.bot
+        ? player.surrendered
+          ? "surrender-policy"
+          : "bot-policy-" + (player.botSlot % 3)
+        : "human";
+    const event = {
+      type,
+      at: this.elapsed,
+      companyId: player?.id ?? null,
+      actor,
+      ...data,
+    };
+    this.telemetry.events.push(event);
+    if (this.telemetry.events.length > 5000) this.telemetry.events.shift();
+    return event;
+  }
+  companyTelemetry(p) {
+    return (this.telemetry.companies[p.id] ??= {
+      regionSeconds: 0,
+      research: 0,
+      completedResearch: 0,
+      treatmentOutput: Object.fromEntries(KEYS.map((k) => [k, 0])),
+      factoryCreditSeconds: 0,
+      redirectedFunding: 0,
+      unusedFunding: 0,
+      dispatches: 0,
+      programmes: 0,
+      eliminatedAt: null,
+    });
+  }
+  replayBoundary() {
+    const state = {
+      phase: this.phase,
+      result: this.result,
+      players: [...this.players.values()].map((p) => ({
+        id: p.id,
+        regions: this.owned(p).map((r) => r.id),
+        research: p.research,
+        completed: p.completed,
+        allocation: p.allocation,
+        selectedTreatment: p.selectedTreatment,
+        regionSeconds: p.regionSeconds,
+        eliminated: p.eliminated,
+      })),
+      regions: this.regions.map((r) => ({
+        ownerId: r.ownerId,
+        level: r.level,
+        upgradeProgress: r.upgradeProgress,
+        protection: r.protection,
+        inventories: r.inventories,
+        campaigns: r.campaigns,
+        programme: r.programme,
+      })),
+      convoys: this.convoys.map((c) => ({
+        companyId: c.companyId,
+        sourceId: c.sourceId,
+        targetId: c.targetId,
+        path: c.path,
+        index: c.index,
+        supply: c.supply,
+        dueAt: c.dueAt,
+      })),
+    };
+    return {
+      at: this.elapsed,
+      digest: createHash("sha256").update(JSON.stringify(state)).digest("hex"),
+    };
+  }
+  exportReplay() {
+    return {
+      format: 1,
+      step: this.balance.match.step,
+      seed: this.seed,
+      balanceVersion: this.balance.version,
+      lobbySize: this.lobbySize,
+      matchSeconds: this.matchSeconds,
+      placementSeconds: this.placementSeconds,
+      columns: this.map.columns,
+      rows: this.map.rows,
+      companies: [...this.players.values()].map((p) => ({
+        id: p.id,
+        name: p.name,
+        bot: p.bot && !p.surrendered,
+        botSlot: p.botSlot,
+        initialRegionId: p.initialRegionId,
+        specialty: p.specialty,
+      })),
+      commands: this.commandLog
+        .filter((x) => x.status === "applied")
+        .map((x) => ({
+          companyId: x.companyId,
+          processedAt: x.processedAt,
+          message: x.message,
+        })),
+      boundaries: this.boundarySnapshots.map((boundary) => ({ ...boundary })),
+      result: this.result,
+    };
+  }
+  tick(seconds = this.balance.match.step) {
+    if (this.phase === PHASES.FINISHED) return;
+    this.accumulator += clamp(
+      Number(seconds) || 0,
+      0,
+      this.balance.match.maxTickSeconds,
+    );
+    while (
+      this.accumulator + 1e-9 >= this.balance.match.step &&
+      this.phase !== PHASES.FINISHED
+    ) {
+      this.step();
+      this.accumulator -= this.balance.match.step;
+    }
+  }
+  processCommands() {
+    const queued = this.commands
+      .splice(0)
+      .sort((a, b) => a.sequence - b.sequence);
+    for (const envelope of queued) {
+      const p = this.players.get(envelope.companyId),
+        m = envelope.message;
+      let ok = false;
+      if (!p) this.lastRejection = "unknown_company";
+      else if (m.type === "start")
+        ok =
+          this.phase === PHASES.PLACEMENT &&
+          this.start(p, m.regionId, m.specialty, true);
+      else if (this.phase !== PHASES.ACTIVE)
+        this.lastRejection = "invalid_phase";
+      else if (p.eliminated || p.bot)
+        this.lastRejection = "not_human_controlled";
+      else {
+        const actions = {
+          allocate: () => this.allocate(p, m.allocation),
+          budget: () => this.changeBudget(p, m.category, m.value),
+          budgetPreset: () => this.applyBudgetPreset(p, m.preset),
+          selectTreatment: () => this.selectTreatment(p, m.treatment),
+          dispatchPreferences: () =>
+            this.setDispatchPreferences(p, m.commitment, m.filter),
+          contest: () =>
+            this.dispatch(p, m.fromId, m.toId, m.commitment, m.filter),
+          dispatch: () =>
+            this.dispatch(p, m.fromId, m.toId, m.commitment, m.filter),
+          withdraw: () => this.withdraw(p, m.regionId, m.toId),
+          research: () => this.prioritizeResearch(p, m.project, m.indication),
+          programme: () => this.activateProgramme(p, m.regionId),
+          pin: () => this.setPin(p, m.kind, m.regionId),
+          surrender: () => {
+            p.surrendered = true;
+            p.bot = true;
+            return true;
+          },
+        };
+        ok = actions[m.type]?.() ?? this.reject("unknown_command");
+      }
+      envelope.status = ok ? "applied" : "rejected";
+      envelope.processedAt =
+        this.phase === PHASES.ACTIVE ? this.elapsed : this.lobbyElapsed;
+      envelope.reason = ok ? null : this.lastRejection;
+      if (ok)
+        this.recordTelemetry("decision", p, {
+          command: m.type,
+          commandId: m.commandId,
+        });
+    }
+  }
+  beginMatch() {
+    const vacant = this.lobbySize - this.players.size;
+    for (let i = 0; i < vacant; i++)
+      this.addPlayer(`Automated ${String(i + 1).padStart(2, "0")}`, {
+        bot: true,
+      });
+    const freePads = this.pads.filter(
+      (id) => this.regions[id].ownerId === null,
+    );
+    const unplaced = [...this.players.values()]
+      .filter((p) => !p.started)
+      .sort((a, b) => a.id.localeCompare(b.id));
+    unplaced.forEach((p, index) => this.start(p, freePads[index]));
+    this.phase = PHASES.ACTIVE;
+    this.elapsed = 0;
+    this.startedAt = this.now();
+  }
   /** Fill a placement lobby through the ordinary player, placement, and bot-policy paths. */
-  populateAutomatedLobby(){if(this.phase===PHASES.WAITING){this.phase=PHASES.PLACEMENT;this.placementRemaining=this.placementSeconds;}if(this.phase!==PHASES.PLACEMENT)throw new Error('Automated lobby can only be populated during placement');while(this.players.size<this.lobbySize){const slot=this.players.size,p=this.addPlayer(`Automated ${String(slot+1).padStart(2,'0')}`,{bot:true});if(!this.start(p,this.pads[slot],PROFILES[slot%PROFILES.length],true))throw new Error('Unable to place automated company');}this.beginMatch();return [...this.players.values()];}
-  step(){this.processCommands();if(this.phase===PHASES.WAITING)return;if(this.phase===PHASES.PLACEMENT){this.lobbyElapsed+=this.balance.match.step;this.placementRemaining=Math.max(0,this.placementSeconds-this.lobbyElapsed);if(this.placementRemaining<=0||this.players.size===this.lobbySize)this.beginMatch();return;}const start=this.elapsed,end=Math.min(this.matchSeconds,start+this.balance.match.step),dt=end-start;if(dt<=0){this.checkVictory(0);return;}for(const p of this.players.values()){if(!p.connected&&!p.surrendered&&p.disconnectedAt!=null&&start-p.disconnectedAt>=this.balance.bots.takeoverSeconds)p.bot=true;if(p.pendingAllocation){p.allocation=p.pendingAllocation;p.pendingAllocation=null;}if(p.pendingTreatment&&start+1e-9>=p.manufacturingAvailableAt){p.selectedTreatment=p.pendingTreatment;p.pendingTreatment=null;}}this.deliver(end);this.expireProgrammes(end);for(const p of this.players.values())if(p.started&&!p.eliminated)this.economy(p,dt,start,end);this.regenerate(dt);this.resolveContests(dt,end);this.elapsed=end;this.applyCompletions();this.clearInvalidPins();this.eliminate();this.runBots();this.checkVictory(dt);this.telemetry.totals.contestSeconds+=this.contests.size*dt;this.boundarySnapshots.push(this.replayBoundary());}
-  economy(p,dt,start,end){const owned=this.owned(p);p.regionSeconds+=owned.length*dt;let gross=this.balance.economy.grant;let operating=0;for(const r of owned){let mult=1;if(r.acquiredAt!=null&&r.acquiredAt>0){const commissioned=Math.max(0,Math.min(end,r.acquiredAt+this.balance.economy.commissioningSeconds)-start);mult=1-(1-this.balance.economy.commissioningMultiplier)*commissioned/dt;}gross+=mult*(this.balance.economy.regionBase+this.balance.economy.levelIncome*r.level);operating+=this.balance.economy.operatingBase+this.balance.economy.operatingLevel*r.level;}const d=Math.max(0,owned.length-this.balance.economy.administrationGrace),admin=(p.completed.includes('R12')?this.balance.researchEffects.scheduling:1)*this.balance.economy.administration*owned.length*d/(d+this.balance.economy.administrationCurve);p.gross=gross;p.upkeep=operating+admin;p.net=Math.max(0,gross-p.upkeep);p.revenue+=p.net*dt;
-    const alloc=p.allocation,rf=p.net*dt*alloc.research/100,ipf=p.net*dt*alloc.infrastructure/100,mf=p.net*dt*alloc.manufacturing/100;const beforeResearch=p.research,researchOverflow=this.fundResearch(p,rf,dt),beforeInfrastructure=this.totalUpgradeProgress(p),infrastructureOverflow=this.fundInfrastructure(p,ipf,dt);p.researchSpend=(p.research-beforeResearch)/dt;p.infrastructureSpend=(this.totalUpgradeProgress(p)-beforeInfrastructure)/dt;p.directManufacturingFunding=mf/dt;p.researchOverflow=researchOverflow/dt;p.infrastructureOverflow=infrastructureOverflow/dt;p.overflow=p.researchOverflow+p.infrastructureOverflow;p.manufacturingFunding=(mf+researchOverflow+infrastructureOverflow)/dt;this.manufacture(p,mf+researchOverflow+infrastructureOverflow,dt,owned);this.updateSchedulingFeedback(p);}
-  totalUpgradeProgress(p){return this.owned(p).reduce((sum,r)=>sum+r.upgradeProgress,0);}
-  activeResearch(p){return p.researchQueue.find(id=>!p.completed.includes(id)&&(!this.balance.research[id][1]||p.completed.includes(this.balance.research[id][1])));}
-  fundResearch(p,funding,dt){const id=this.activeResearch(p);if(!id)return funding;const [, ,cost,minTime]=this.balance.research[id],progress=p.researchProgress[id]||0,available=p.researchBank+funding,spend=Math.min(available,cost-progress,cost/minTime*dt);if(id==='R05'&&spend>0&&!p.r05Choice)p.r05Choice=p.r05RequestedChoice??this.defaultR05Choice(p);p.researchProgress[id]=progress+spend;p.research+=spend;p.researchBank=Math.min(this.balance.economy.bankCap,available-spend);return Math.max(0,available-spend-this.balance.economy.bankCap);}
-  defaultR05Choice(p){const eligible=PROFILES.filter(profile=>profile!==p.specialty),adjacentCounts=Object.fromEntries(eligible.map(profile=>[profile,0])),mapCounts={...adjacentCounts};for(const r of this.regions){if(mapCounts[r.profile]!=null)mapCounts[r.profile]++;if(r.ownerId!==p.id&&r.neighbours.some(n=>this.regions[n].ownerId===p.id)&&adjacentCounts[r.profile]!=null)adjacentCounts[r.profile]++;}return eligible.sort((a,b)=>adjacentCounts[b]-adjacentCounts[a]||mapCounts[b]-mapCounts[a]||PROFILES.indexOf(a)-PROFILES.indexOf(b))[0];}
-  infrastructureTarget(p){const owned=this.owned(p),unfinished=owned.filter(r=>r.level<this.balance.infrastructure.maxLevel),sort=(a,b)=>a.level-b.level||(a.acquiredAt??Infinity)-(b.acquiredAt??Infinity)||a.id-b.id,pinned=unfinished.find(r=>r.id===p.developmentPin);if(pinned)return {region:pinned,reason:'development pin'};const capable=unfinished.filter(r=>r.level>=this.balance.treatments[p.selectedTreatment].level).sort(sort);if(capable[0])return {region:capable[0],reason:`supports ${this.balance.treatments[p.selectedTreatment].id}`};const fallback=unfinished.sort(sort)[0];return fallback?{region:fallback,reason:'lowest level, then acquisition and ID'}:null;}
-  fundInfrastructure(p,funding,dt){const target=this.infrastructureTarget(p),r=target?.region;if(!r){const total=p.infrastructureBank+funding;p.infrastructureBank=Math.min(this.balance.economy.bankCap,total);return Math.max(0,total-this.balance.economy.bankCap);}const costs=this.balance.infrastructure.costs,times=this.balance.infrastructure.minimumSeconds,cost=costs[r.level+1],available=p.infrastructureBank+funding,spend=Math.min(available,cost-r.upgradeProgress,cost/times[r.level+1]*dt);r.upgradeProgress+=spend;p.infrastructureBank=Math.min(this.balance.economy.bankCap,available-spend);return Math.max(0,available-spend-this.balance.economy.bankCap);}
-  productionEligible(p,r,storageUsed=this.storageUsed(r),storageCapacity=this.storageCap(r)){const treatment=this.balance.treatments[p.selectedTreatment],overCapacity=storageUsed>storageCapacity+1e-9;return r.ownerId===p.id&&r.level>=treatment.level&&storageUsed<storageCapacity&&!overCapacity;}
-  manufacture(p,funding,dt,owned){const key=p.selectedTreatment,t=this.balance.treatments[key],efficiency=p.completed.includes('R01')?this.balance.researchEffects.scaleUp:this.balance.economy.productionEfficiency,eligible=owned.filter(r=>this.productionEligible(p,r));let remaining=funding,accepted=0;const weighted=eligible.map(r=>({r,w:(p.productionPin===r.id?this.balance.infrastructure.pinWeight:1)*(r.neighbours.some(n=>this.regions[n].ownerId!==p.id)?this.balance.infrastructure.borderWeight:1),used:0}));while(remaining>1e-9){const active=weighted.filter(x=>(this.balance.economy.productionBase+this.balance.economy.productionPerLevel*x.r.level)*dt-x.used>1e-9&&this.storageCap(x.r)-this.storageUsed(x.r)>1e-9);if(!active.length)break;const total=active.reduce((s,x)=>s+x.w,0),before=remaining;for(const x of active){const share=before*x.w/total,room=(this.storageCap(x.r)-this.storageUsed(x.r))/efficiency,cap=(this.balance.economy.productionBase+this.balance.economy.productionPerLevel*x.r.level)*dt-x.used,take=Math.min(share,cap,room);x.used+=take;x.r.inventories[key]+=take*efficiency/t.cost;remaining-=take;accepted+=take;}if(before-remaining<1e-9)break;}
-    if(accepted>0&&!this.firstTreatmentOutput.has(key)){this.firstTreatmentOutput.add(key);this.recordTelemetry('treatment-output',p,{treatment:key,units:accepted*efficiency/t.cost});}
-    p.production=accepted*efficiency/t.cost/dt;p.manufacturingSpend=accepted/dt;p.unusedManufacturing=remaining/dt;const metrics=this.companyTelemetry(p),units=accepted*efficiency/t.cost;metrics.treatmentOutput[key]+=units;metrics.factoryCreditSeconds+=accepted;metrics.redirectedFunding+=(p.researchOverflow+p.infrastructureOverflow)*dt;metrics.unusedFunding+=remaining;metrics.regionSeconds=p.regionSeconds;this.telemetry.totals.treatmentOutput[key]+=units;this.telemetry.totals.factoryCreditSeconds+=accepted;this.telemetry.totals.redirectedFunding+=(p.researchOverflow+p.infrastructureOverflow)*dt;this.telemetry.totals.unusedFunding+=remaining;}
-  updateSchedulingFeedback(p){const active=this.activeResearch(p);p.researchActive=active??null;if(active){const project=this.balance.research[active],remaining=project[2]-(p.researchProgress[active]||0);p.researchEta=p.researchSpend>0?remaining/p.researchSpend:null;}else p.researchEta=null;const target=this.infrastructureTarget(p);p.infrastructureActive=target?.region.id??null;p.infrastructureReason=target?.reason??'all regions fully developed';if(target){const costs=this.balance.infrastructure.costs,remaining=costs[target.region.level+1]-target.region.upgradeProgress;p.infrastructureEta=p.infrastructureSpend>0?remaining/p.infrastructureSpend:null;}else p.infrastructureEta=null;}
-  storageCap(r){return this.balance.infrastructure.storageBase+this.balance.infrastructure.storagePerLevel*r.level;} storageUsed(r){return KEYS.reduce((s,k)=>s+r.inventories[k]*this.balance.treatments[k].cost,0);}
-  deliver(time){const arrivals=[];for(const c of this.convoys)while(c.dueAt<=time+1e-9){const current=c.path[c.index];if(c.index>0&&current!==c.targetId&&this.regions[current].ownerId!==c.companyId){c.interrupted=true;arrivals.push(c);break;}const next=c.path[c.index+1];if(next==null){arrivals.push(c);break;}c.index++;if(next===c.targetId||this.regions[next].ownerId!==c.companyId){if(next!==c.targetId)c.interrupted=true;arrivals.push(c);break;}c.dueAt+=c.edgeTime;}const groups=new Map();for(const c of arrivals){this.convoys.splice(this.convoys.indexOf(c),1);const regionId=c.path[c.index],key=`${regionId}:${c.companyId}`;if(c.interrupted)this.routeInterruptions.push({id:`${c.id}:${regionId}`,convoyId:c.id,companyId:c.companyId,regionId,at:time});if(!groups.has(key))groups.set(key,{region:this.regions[regionId],companyId:c.companyId,supply:this.emptyInventory(),convoyIds:[]});const group=groups.get(key);group.convoyIds.push(c.id);for(const k of KEYS)group.supply[k]+=c.supply[k];}for(const {region:r,companyId,supply,convoyIds} of groups.values()){const incoming=KEYS.reduce((s,k)=>s+supply[k]*this.balance.treatments[k].cost,0);let admitted=incoming;if(r.ownerId===companyId)admitted=this.unload(r,supply);else{r.campaigns[companyId]??=this.emptyInventory();for(const k of KEYS)r.campaigns[companyId][k]+=supply[k];r.quietTime=0;}this.arrivalReports.push({id:`${companyId}:${r.id}:${time}`,companyId,regionId:r.id,convoyIds,incomingCapacity:incoming,admittedCapacity:admitted,discardedCapacity:incoming-admitted,disposition:incoming>admitted?'excess_discarded':'admitted',at:time});}this.arrivalReports=this.arrivalReports.slice(-100);this.routeInterruptions=this.routeInterruptions.slice(-100);this.syncContests(time);}
-  unload(r,supply){const free=Math.max(0,this.storageCap(r)-this.storageUsed(r)),incoming=KEYS.reduce((s,k)=>s+supply[k]*this.balance.treatments[k].cost,0),admitted=Math.min(free,incoming),scale=incoming?admitted/incoming:0;for(const k of KEYS)r.inventories[k]+=supply[k]*scale;return admitted;}
-  expireProgrammes(time){for(const r of this.regions)if(r.programme){if(r.ownerId!==r.programme.companyId){r.programme=null;continue;}if(r.programme.pending&&r.programme.completesAt<=time){const p=this.players.get(r.ownerId),advanced=p?.completed.includes('R10'),duration=advanced?this.balance.programme.advancedDuration:this.balance.programme.duration;r.programme.pending=false;r.programme.maxProtection=advanced?this.balance.programme.advancedProtection:this.balance.programme.protection;r.programme.protection=r.programme.maxProtection;r.programme.expiresAt=r.programme.completesAt+duration;r.programme.scheduledExpiryAt=r.programme.expiresAt;}if(!r.programme.pending&&r.programme.expiresAt<=time)r.programme=null;}}
-  regenerate(dt){for(const r of this.regions){if(Object.keys(r.campaigns).some(id=>this.campaignForce(r,id)>0)){r.quietTime=0;continue;}r.quietTime+=dt;if(r.quietTime>this.balance.contest.quietSeconds)r.protection=Math.min(r.ownerId?this.balance.contest.ownedProtectionBase+this.balance.contest.ownedProtectionLevel*r.level:this.balance.contest.neutralProtection,r.protection+(r.ownerId?this.balance.contest.ownedRegenerationBase+this.balance.contest.ownedRegenerationLevel*r.level:this.balance.contest.neutralRegeneration)*dt);}}
-  campaignForce(r,id){const p=this.players.get(id);return p?KEYS.reduce((s,k)=>s+r.campaigns[id][k]*this.force(p,k,r.profile),0):0;}
-  defenderForce(r){const p=this.players.get(r.ownerId);return r.protection+(r.programme?.protection||0)+(p?KEYS.reduce((s,k)=>s+r.inventories[k]*this.force(p,k,r.profile,true),0):0);}
-  resolveContests(dt,time){const changes=[];for(const r of this.regions){let parties=[];const df=this.defenderForce(r);if(df>0)parties.push({id:r.ownerId??'neutral',defender:true,force:df});for(const id of Object.keys(r.campaigns)){const f=this.campaignForce(r,id);if(f>0)parties.push({id,defender:false,force:f});}if(parties.length<2){if(parties.length===1&&!parties[0].defender)changes.push({r,winner:parties[0].id});continue;}const losses=new Map();for(const target of parties){let loss=0;for(const source of parties)if(source!==target){const others=parties.reduce((s,x)=>s+(x!==source?x.force:0),0);loss+=(this.balance.contest.forceShare*source.force+Math.min(this.balance.contest.flatPressureCap,source.force))*target.force/others;}losses.set(target,Math.min(target.force,loss*dt));}for(const party of parties){const remain=party.force-losses.get(party);if(party.defender)this.consumeDefense(r,losses.get(party)+(remain<this.balance.contest.exhaustedBelow?Math.max(0,remain):0));else this.consumeCampaign(r,party.id,losses.get(party)+(remain<this.balance.contest.exhaustedBelow?Math.max(0,remain):0));party.remain=remain<this.balance.contest.exhaustedBelow?0:remain;}const defender=parties.find(x=>x.defender),attackers=parties.filter(x=>!x.defender&&x.remain>0);if(defender?.remain>0)continue;if(attackers.length===1)changes.push({r,winner:attackers[0].id});else if(attackers.length>1)changes.push({r,winner:null,disputed:true});}
-    for(const change of changes)this.capture(change.r,change.winner,time,change.disputed);this.syncContests(time);}
-  consumeDefense(r,loss){let left=loss;if(r.programme){const before=r.programme.protection,x=Math.min(left,before);r.programme.protection-=x;left-=x;if(before>0&&r.programme.protection<=0)this.recordTelemetry('programme-depleted',this.players.get(r.programme.companyId),{regionId:r.id});}const base=Math.min(left,r.protection);r.protection-=base;left-=base;if(left>0){const p=this.players.get(r.ownerId),force=KEYS.reduce((s,k)=>s+r.inventories[k]*(p?this.force(p,k,r.profile,true):1),0),ratio=force?Math.min(1,left/force):0;for(const k of KEYS)r.inventories[k]*=1-ratio;}}
-  consumeCampaign(r,id,loss){const force=this.campaignForce(r,id);if(!force)return;const ratio=Math.min(1,loss/force);for(const k of KEYS)r.campaigns[id][k]*=1-ratio;if(this.campaignForce(r,id)<this.balance.contest.exhaustedBelow)delete r.campaigns[id];}
-  capture(r,winner,time,disputed=false){const old=r.ownerId;if(winner===old)return;if(old!==null||winner!==null)this.telemetry.events.push({type:'region-change',at:time,regionId:r.id,fromCompanyId:old,toCompanyId:winner,disputed});const supply=winner?r.campaigns[winner]:null;r.ownerId=winner;r.upgradeProgress=0;r.inventories=this.emptyInventory();r.protection=0;r.programme=null;r.quietTime=0;r.disputed=disputed;if(disputed){r.acquiredAt=null;return;}r.level=Math.max(0,r.level-1);if(supply)r.inventories={...supply};r.campaigns={};r.acquiredAt=winner?time:null;r.dispatchAvailableAt=time+this.balance.movement.captureCooldown;}
-  syncContests(at=this.elapsed){const activeRegions=new Set();this.contests.clear();for(const r of this.regions)for(const id of Object.keys(r.campaigns)){this.contests.set(`${r.id}:${id}`,{regionId:r.id,attackerId:id,power:this.campaignForce(r,id),defense:this.defenderForce(r)});activeRegions.add(r.id);}for(const regionId of activeRegions)if(!this.contestEpisodes.has(regionId)){this.contestEpisodes.set(regionId,at);const r=this.regions[regionId],attackers=Object.keys(r.campaigns);this.recordTelemetry('contest-start',null,{at,regionId,rivalContest:r.ownerId!=null&&attackers.some(id=>id!==r.ownerId)});}for(const [regionId,startedAt] of this.contestEpisodes)if(!activeRegions.has(regionId)){this.recordTelemetry('contest-end',null,{at,regionId,duration:Math.max(0,at-startedAt)});this.contestEpisodes.delete(regionId);}}
-  applyCompletions(){for(const p of this.players.values()){for(const id of Object.keys(p.researchProgress))if(!p.completed.includes(id)&&p.researchProgress[id]>=this.balance.research[id][2]-1e-8){p.completed.push(id);this.recordTelemetry('research-complete',p,{project:id});this.companyTelemetry(p).research=p.research;this.companyTelemetry(p).completedResearch=p.completed.length;if(id==='R04'&&!p.targetedIndications.includes(p.specialty))p.targetedIndications.push(p.specialty);if(id==='R05'&&p.r05Choice&&!p.targetedIndications.includes(p.r05Choice))p.targetedIndications.push(p.r05Choice);p.unlocked=this.unlocks(p);}}for(const r of this.regions){const costs=this.balance.infrastructure.costs;if(r.level<this.balance.infrastructure.maxLevel&&r.upgradeProgress>=costs[r.level+1]-1e-8){r.level++;r.upgradeProgress=0;}}}
-  clearInvalidPins(){for(const p of this.players.values())for(const kind of ['production','development'])if(this.regions[p[`${kind}Pin`]]?.ownerId!==p.id)p[`${kind}Pin`]=null;}
-  eliminate(){for(const p of this.players.values())if(p.started&&!p.eliminated&&!this.regions.some(r=>r.ownerId===p.id)){p.eliminated=true;this.companyTelemetry(p).eliminatedAt=this.elapsed;this.recordTelemetry('elimination',p);this.convoys=this.convoys.filter(c=>c.companyId!==p.id);for(const r of this.regions)delete r.campaigns[p.id];}}
-  inventoryForce(p,r,profile=r.profile){return KEYS.reduce((sum,key)=>sum+r.inventories[key]*this.force(p,key,profile),0);}
-  botThreats(p){return this.owned(p).map(region=>{const campaigns=Object.entries(region.campaigns).filter(([id])=>id!==p.id).reduce((sum,[id])=>sum+this.campaignForce(region,id),0),incoming=this.convoys.filter(c=>c.companyId!==p.id&&c.targetId===region.id).reduce((sum,c)=>sum+c.capacity,0),rivals=region.neighbours.map(id=>this.regions[id]).filter(r=>r.ownerId&&r.ownerId!==p.id),rivalForce=rivals.reduce((max,r)=>Math.max(max,this.defenderForce(r)),0),defense=this.defenderForce(region);return {region,score:campaigns+incoming+Math.max(0,rivalForce-defense),urgent:campaigns>0||incoming>0||rivalForce>=defense*this.balance.bots.threatRatio};}).filter(x=>x.urgent).sort((a,b)=>b.score-a.score||a.region.id-b.region.id);}
-  launchExactVac(p,from,target){if(from.ownerId!==p.id||target.ownerId!==p.id||from.inventories.vaccine<this.balance.programme.vaccineUnits||this.elapsed<from.dispatchAvailableAt||this.convoys.filter(c=>c.companyId===p.id).length>=this.balance.movement.convoySlots)return false;const path=this.path(from.id,target.id,p.id);if(!path||path.length<2)return false;const supply=this.emptyInventory();supply.vaccine=this.balance.programme.vaccineUnits;from.inventories.vaccine-=this.balance.programme.vaccineUnits;const edgeTime=this.balance.treatments.vaccine.edgeTime*(p.completed.includes('R11')?this.balance.researchEffects.logistics:1);this.convoys.push({id:this.id(),companyId:p.id,sourceId:from.id,targetId:target.id,path,index:0,supply,capacity:this.balance.programme.vaccineUnits*this.balance.treatments.vaccine.cost,edgeTime,dueAt:this.elapsed+edgeTime,createdAt:this.elapsed,objective:'programme'});from.dispatchAvailableAt=this.elapsed+this.balance.movement.dispatchCooldown;return true;}
-  manageBotStrategy(p){p.allocation={...BUDGET_PRESETS.balanced};const order=this.balance.bots.researchOrders[p.botSlot%this.balance.bots.researchOrders.length];p.researchQueue=[...order.filter(id=>!p.completed.includes(id)),...p.researchQueue.filter(id=>!order.includes(id)&&!p.completed.includes(id))];const borders=this.owned(p).filter(r=>r.neighbours.some(id=>this.regions[id].ownerId!==p.id)),profiles=borders.length?borders.map(r=>r.profile):[p.specialty];const ranked=this.unlocks(p).map(key=>({key,value:profiles.reduce((sum,profile)=>sum+this.force(p,key,profile)/this.balance.treatments[key].cost,0)/profiles.length})).sort((a,b)=>b.value-a.value||KEYS.indexOf(a.key)-KEYS.indexOf(b.key));let choice=ranked[0]?.key??'medicine';if(this.balance.treatments[choice].level===2&&!this.owned(p).some(r=>r.level>=2)){const candidate=this.owned(p).filter(r=>r.level<2).sort((a,b)=>b.level-a.level||a.id-b.id)[0];p.developmentPin=candidate?.id??null;choice=ranked.find(x=>this.balance.treatments[x.key].level<=1)?.key??'medicine';}if(p.programmeObjective==null)this.transitionTreatment(p,choice,false);}
-  runBotTactical(p){const threats=this.botThreats(p);
-    if(p.programmeObjective!=null&&!threats.some(x=>x.region.id===p.programmeObjective&&!x.region.programme))p.programmeObjective=null;
-    if(p.completed.includes('R09')&&threats.length){const target=threats.find(x=>!x.region.programme)?.region;if(target){p.programmeObjective=target.id;if(target.inventories.vaccine>=this.balance.programme.vaccineUnits&&this.activateProgramme(p,target.id)){p.programmeObjective=null;return {type:'programme',regionId:target.id};}const source=this.owned(p).filter(r=>r.id!==target.id&&r.inventories.vaccine>=this.balance.programme.vaccineUnits&&this.path(r.id,target.id,p.id)).sort((a,b)=>this.path(a.id,target.id,p.id).length-this.path(b.id,target.id,p.id).length||a.id-b.id)[0];if(source&&this.launchExactVac(p,source,target))return {type:'programme-supply',fromId:source.id,regionId:target.id,units:this.balance.programme.vaccineUnits};this.transitionTreatment(p,'vaccine',false);const factory=this.owned(p).filter(r=>r.level>=2).sort((a,b)=>a.id-b.id)[0];if(factory)p.productionPin=factory.id;else p.developmentPin=this.owned(p).sort((a,b)=>b.level-a.level||a.id-b.id)[0]?.id??null;}}
-    const reinforcements=[];for(const threat of threats)for(const source of this.owned(p)){if(source.id===threat.region.id)continue;const path=this.path(source.id,threat.region.id,p.id);if(!path)continue;const keys=KEYS.filter(k=>source.inventories[k]>0),edge=Math.max(...keys.map(k=>this.balance.treatments[k].edgeTime),3)*(p.completed.includes('R11')?this.balance.researchEffects.logistics:1),arrival=(path.length-1)*edge,capacity=this.storageUsed(source)*this.balance.bots.retainedShare;if(arrival<=this.balance.bots.reinforcementArrivalSeconds&&capacity>=this.balance.movement.minimumPacket)reinforcements.push({source,target:threat.region,arrival,score:threat.score});}reinforcements.sort((a,b)=>b.score-a.score||a.arrival-b.arrival||a.target.id-b.target.id||a.source.id-b.source.id);for(const x of reinforcements)if(this.dispatch(p,x.source.id,x.target.id,this.balance.bots.reinforcementCommitment,'all'))return {type:'reinforce',fromId:x.source.id,toId:x.target.id,commitment:this.balance.bots.reinforcementCommitment,arrival:x.arrival};
-    const attacks=[];for(const source of this.owned(p).sort((a,b)=>a.id-b.id))for(const id of source.neighbours){const target=this.regions[id];if(target.ownerId===p.id)continue;const available=this.inventoryForce(p,source,target.profile);for(const share of this.balance.bots.packetShares){const commitment=share*100;const force=available*commitment/100,defense=this.defenderForce(target),ratio=target.ownerId?this.balance.bots.rivalRatio:this.balance.bots.neutralRatio,owner=this.players.get(target.ownerId),production=owner?(this.balance.economy.productionBase+this.balance.economy.productionPerLevel*target.level)*(owner.completed.includes('R01')?this.balance.researchEffects.scaleUp:this.balance.economy.productionEfficiency)*this.force(owner,owner.selectedTreatment,target.profile)/this.balance.treatments[owner.selectedTreatment].cost:0,pressure=this.balance.contest.forceShare*force+Math.min(this.balance.contest.flatPressureCap,force);if(force>=defense*ratio&&pressure>production)attacks.push({source,target,commitment,ratio:defense?force/defense:Infinity});}}attacks.sort((a,b)=>a.target.id-b.target.id||a.source.id-b.source.id||a.commitment-b.commitment||b.ratio-a.ratio);for(const x of attacks)if(this.dispatch(p,x.source.id,x.target.id,x.commitment,'all'))return {type:'attack',fromId:x.source.id,toId:x.target.id,commitment:x.commitment,ratio:x.ratio};return null;}
-  runBots(){for(const p of this.players.values()){if(!p.bot||p.eliminated||!p.started||this.elapsed+1e-9<p.nextBotAt)continue;p.nextBotAt+=this.balance.bots.evaluationSeconds;if(p.nextBotAt<=this.elapsed)p.nextBotAt=this.elapsed+this.balance.bots.evaluationSeconds;this.manageBotStrategy(p);p.botAction=this.runBotTactical(p);}}
-  checkVictory(dt){const alive=[...this.players.values()].filter(p=>p.started&&!p.eliminated),counts=alive.map(p=>({player:p,count:this.owned(p).length})).sort((a,b)=>b.count-a.count||b.player.regionSeconds-a.player.regionSeconds||a.player.id.localeCompare(b.player.id));if(alive.length===1&&[...this.players.values()].filter(p=>p.started).length>1){this.finish([alive[0]],'last-standing');return;}const leader=counts[0],threshold=Math.ceil(this.balance.match.dominanceShare*this.regions.length);if(leader?.count>=threshold){if(this.holdLeader===leader.player.id)this.holdSeconds+=dt;else{this.holdLeader=leader.player.id;this.holdSeconds=0;}if(this.holdSeconds>=this.balance.match.dominanceSeconds){this.finish([leader.player],'dominance');return;}}else{this.holdLeader=null;this.holdSeconds=0;}if(this.elapsed>=this.matchSeconds&&leader?.count>0){const winners=counts.filter(x=>x.count===leader.count&&Math.abs(x.player.regionSeconds-leader.player.regionSeconds)<1e-9).map(x=>x.player);this.finish(winners,'timed');}}
-  finish(players,type){const winners=Array.isArray(players)?players:[players];this.winner=winners[0].id;this.result={type,winners:winners.map(p=>p.id),at:this.elapsed};this.telemetry.victory={...this.result};this.recordTelemetry('victory',winners[0],{victoryType:type,winners:this.result.winners});this.phase=PHASES.FINISHED;this.finishedAt=this.now();}
-  snapshot(){const threshold=Math.ceil(this.balance.match.dominanceShare*this.regions.length),players=[...this.players.values()].map(({credential,...p})=>({...p,controlState:p.surrendered?'surrendered':p.eliminated?'eliminated':p.bot?'automated':p.connected?'connected':'disconnected',ownRegionCount:this.owned(p).length,effectiveSpending:{research:p.researchSpend,manufacturing:p.manufacturingSpend,infrastructure:p.infrastructureSpend},overflows:{research:p.researchOverflow,infrastructure:p.infrastructureOverflow,total:p.overflow},dominance:{regions:this.owned(p).length,threshold,holding:this.holdLeader===p.id,seconds:this.holdLeader===p.id?this.holdSeconds:0,requiredSeconds:this.balance.match.dominanceSeconds},dispatchStatus:{convoySlotsUsed:this.convoys.filter(c=>c.companyId===p.id).length,convoySlots:this.balance.movement.convoySlots,foreignTargetsUsed:this.foreignTargets(p).size,foreignTargetSlots:Math.min(this.balance.movement.foreignMaxSlots,this.balance.movement.foreignBaseSlots+Math.floor(this.owned(p).length/this.balance.movement.foreignSlotRegions)),targetCommitments:Object.fromEntries(this.regions.map(r=>[r.id,this.targetCommitment(p.id,r.id)]).filter(([,value])=>value>0))}}));
-    const regions=this.regions.map(r=>{const storageUsed=this.storageUsed(r),storageCapacity=this.storageCap(r),owner=this.players.get(r.ownerId),contestParties=[];if(this.defenderForce(r)>0)contestParties.push({companyId:r.ownerId,label:owner?.initials??'N',role:'incumbent',force:this.defenderForce(r)});for(const id of Object.keys(r.campaigns)){const company=this.players.get(id),force=this.campaignForce(r,id);if(force>0)contestParties.push({companyId:id,label:company?.initials??'?',role:'campaign',force});}return {...r,storageUsed,storageCapacity,overCapacity:storageUsed>storageCapacity+1e-9,productionEligible:Boolean(owner)&&this.productionEligible(owner,r,storageUsed,storageCapacity),commissioningRemaining:Math.max(0,r.acquiredAt==null?0:r.acquiredAt+this.balance.economy.commissioningSeconds-this.elapsed),productionFocused:owner?.productionPin===r.id,developmentFocused:owner?.developmentPin===r.id,dispatchRemaining:Math.max(0,r.dispatchAvailableAt-this.elapsed),contestParties};});
-    return {version:this.balance.version,balance:this.balance,acceptance:acceptanceCoverage(),releaseGate:publishedReleaseGate(),seed:this.seed,phase:this.phase,lobbySize:this.lobbySize,placementRemaining:this.placementRemaining,pads:this.pads,availablePads:this.pads.filter(id=>this.regions[id].ownerId===null),reservedPads:this.pads.filter(id=>this.regions[id].ownerId!==null),map:this.map,profiles:PROFILES,treatments:this.balance.treatments,research:this.balance.research,researchOrder:[...DEFAULT_RESEARCH],elapsed:this.elapsed,remaining:Math.max(0,this.matchSeconds-this.elapsed),winner:this.winner,result:this.result,hold:{playerId:this.holdLeader,seconds:this.holdSeconds,threshold,requiredSeconds:this.balance.match.dominanceSeconds},commandOutcomes:this.commandLog.slice(-100).map(({message,...entry})=>({...entry,type:entry.type??message?.type})),players,regions,convoys:this.convoys,contests:[...this.contests.values()],arrivalReports:this.arrivalReports,routeInterruptions:this.routeInterruptions,telemetry:this.telemetry,playtest:buildPlaytestReport(this.telemetry,{elapsed:this.elapsed,result:this.result}),leaderboard:players.map(p=>({id:p.id,name:p.name,color:p.color,initials:p.initials,regions:p.ownRegionCount,regionSeconds:p.regionSeconds})).sort((a,b)=>b.regions-a.regions||b.regionSeconds-a.regionSeconds||a.name.localeCompare(b.name)).slice(0,10)};}
+  populateAutomatedLobby() {
+    if (this.phase === PHASES.WAITING) {
+      this.phase = PHASES.PLACEMENT;
+      this.placementRemaining = this.placementSeconds;
+    }
+    if (this.phase !== PHASES.PLACEMENT)
+      throw new Error("Automated lobby can only be populated during placement");
+    while (this.players.size < this.lobbySize) {
+      const slot = this.players.size,
+        p = this.addPlayer(`Automated ${String(slot + 1).padStart(2, "0")}`, {
+          bot: true,
+        });
+      if (
+        !this.start(p, this.pads[slot], PROFILES[slot % PROFILES.length], true)
+      )
+        throw new Error("Unable to place automated company");
+    }
+    this.beginMatch();
+    return [...this.players.values()];
+  }
+  step() {
+    this.processCommands();
+    if (this.phase === PHASES.WAITING) return;
+    if (this.phase === PHASES.PLACEMENT) {
+      this.lobbyElapsed += this.balance.match.step;
+      this.placementRemaining = Math.max(
+        0,
+        this.placementSeconds - this.lobbyElapsed,
+      );
+      if (this.placementRemaining <= 0 || this.players.size === this.lobbySize)
+        this.beginMatch();
+      return;
+    }
+    const start = this.elapsed,
+      end = Math.min(this.matchSeconds, start + this.balance.match.step),
+      dt = end - start;
+    if (dt <= 0) {
+      this.checkVictory(0);
+      return;
+    }
+    for (const p of this.players.values()) {
+      if (
+        !p.connected &&
+        !p.surrendered &&
+        p.disconnectedAt != null &&
+        start - p.disconnectedAt >= this.balance.bots.takeoverSeconds
+      )
+        p.bot = true;
+      if (p.pendingAllocation) {
+        p.allocation = p.pendingAllocation;
+        p.pendingAllocation = null;
+      }
+      if (p.pendingTreatment && start + 1e-9 >= p.manufacturingAvailableAt) {
+        p.selectedTreatment = p.pendingTreatment;
+        p.pendingTreatment = null;
+      }
+    }
+    this.deliver(end);
+    this.expireProgrammes(end);
+    for (const p of this.players.values())
+      if (p.started && !p.eliminated) this.economy(p, dt, start, end);
+    this.regenerate(dt);
+    this.resolveContests(dt, end);
+    this.elapsed = end;
+    this.applyCompletions();
+    this.clearInvalidPins();
+    this.eliminate();
+    this.runBots();
+    this.checkVictory(dt);
+    this.telemetry.totals.contestSeconds += this.contests.size * dt;
+    this.boundarySnapshots.push(this.replayBoundary());
+  }
+  economy(p, dt, start, end) {
+    const owned = this.owned(p);
+    p.regionSeconds += owned.length * dt;
+    let gross = this.balance.economy.grant;
+    let operating = 0;
+    for (const r of owned) {
+      let mult = 1;
+      if (r.acquiredAt != null && r.acquiredAt > 0) {
+        const commissioned = Math.max(
+          0,
+          Math.min(
+            end,
+            r.acquiredAt + this.balance.economy.commissioningSeconds,
+          ) - start,
+        );
+        mult =
+          1 -
+          ((1 - this.balance.economy.commissioningMultiplier) * commissioned) /
+            dt;
+      }
+      gross +=
+        mult *
+        (this.balance.economy.regionBase +
+          this.balance.economy.levelIncome * r.level);
+      operating +=
+        this.balance.economy.operatingBase +
+        this.balance.economy.operatingLevel * r.level;
+    }
+    const d = Math.max(
+        0,
+        owned.length - this.balance.economy.administrationGrace,
+      ),
+      admin =
+        ((p.completed.includes("R12")
+          ? this.balance.researchEffects.scheduling
+          : 1) *
+          this.balance.economy.administration *
+          owned.length *
+          d) /
+        (d + this.balance.economy.administrationCurve);
+    p.gross = gross;
+    p.upkeep = operating + admin;
+    p.net = Math.max(0, gross - p.upkeep);
+    p.revenue += p.net * dt;
+    const alloc = p.allocation,
+      rf = (p.net * dt * alloc.research) / 100,
+      ipf = (p.net * dt * alloc.infrastructure) / 100,
+      mf = (p.net * dt * alloc.manufacturing) / 100;
+    const beforeResearch = p.research,
+      researchOverflow = this.fundResearch(p, rf, dt),
+      beforeInfrastructure = this.totalUpgradeProgress(p),
+      infrastructureOverflow = this.fundInfrastructure(p, ipf, dt);
+    p.researchSpend = (p.research - beforeResearch) / dt;
+    p.infrastructureSpend =
+      (this.totalUpgradeProgress(p) - beforeInfrastructure) / dt;
+    p.directManufacturingFunding = mf / dt;
+    p.researchOverflow = researchOverflow / dt;
+    p.infrastructureOverflow = infrastructureOverflow / dt;
+    p.overflow = p.researchOverflow + p.infrastructureOverflow;
+    p.manufacturingFunding =
+      (mf + researchOverflow + infrastructureOverflow) / dt;
+    this.manufacture(
+      p,
+      mf + researchOverflow + infrastructureOverflow,
+      dt,
+      owned,
+    );
+    this.updateSchedulingFeedback(p);
+  }
+  totalUpgradeProgress(p) {
+    return this.owned(p).reduce((sum, r) => sum + r.upgradeProgress, 0);
+  }
+  activeResearch(p) {
+    return p.researchQueue.find(
+      (id) =>
+        !p.completed.includes(id) &&
+        (!this.balance.research[id][1] ||
+          p.completed.includes(this.balance.research[id][1])),
+    );
+  }
+  fundResearch(p, funding, dt) {
+    const id = this.activeResearch(p);
+    if (!id) return funding;
+    const [, , cost, minTime] = this.balance.research[id],
+      progress = p.researchProgress[id] || 0,
+      available = p.researchBank + funding,
+      spend = Math.min(available, cost - progress, (cost / minTime) * dt);
+    if (id === "R05" && spend > 0 && !p.r05Choice)
+      p.r05Choice = p.r05RequestedChoice ?? this.defaultR05Choice(p);
+    p.researchProgress[id] = progress + spend;
+    p.research += spend;
+    p.researchBank = Math.min(this.balance.economy.bankCap, available - spend);
+    return Math.max(0, available - spend - this.balance.economy.bankCap);
+  }
+  defaultR05Choice(p) {
+    const eligible = PROFILES.filter((profile) => profile !== p.specialty),
+      adjacentCounts = Object.fromEntries(
+        eligible.map((profile) => [profile, 0]),
+      ),
+      mapCounts = { ...adjacentCounts };
+    for (const r of this.regions) {
+      if (mapCounts[r.profile] != null) mapCounts[r.profile]++;
+      if (
+        r.ownerId !== p.id &&
+        r.neighbours.some((n) => this.regions[n].ownerId === p.id) &&
+        adjacentCounts[r.profile] != null
+      )
+        adjacentCounts[r.profile]++;
+    }
+    return eligible.sort(
+      (a, b) =>
+        adjacentCounts[b] - adjacentCounts[a] ||
+        mapCounts[b] - mapCounts[a] ||
+        PROFILES.indexOf(a) - PROFILES.indexOf(b),
+    )[0];
+  }
+  infrastructureTarget(p) {
+    const owned = this.owned(p),
+      unfinished = owned.filter(
+        (r) => r.level < this.balance.infrastructure.maxLevel,
+      ),
+      sort = (a, b) =>
+        a.level - b.level ||
+        (a.acquiredAt ?? Infinity) - (b.acquiredAt ?? Infinity) ||
+        a.id - b.id,
+      pinned = unfinished.find((r) => r.id === p.developmentPin);
+    if (pinned) return { region: pinned, reason: "development pin" };
+    const capable = unfinished
+      .filter(
+        (r) => r.level >= this.balance.treatments[p.selectedTreatment].level,
+      )
+      .sort(sort);
+    if (capable[0])
+      return {
+        region: capable[0],
+        reason: `supports ${this.balance.treatments[p.selectedTreatment].id}`,
+      };
+    const fallback = unfinished.sort(sort)[0];
+    return fallback
+      ? { region: fallback, reason: "lowest level, then acquisition and ID" }
+      : null;
+  }
+  fundInfrastructure(p, funding, dt) {
+    const target = this.infrastructureTarget(p),
+      r = target?.region;
+    if (!r) {
+      const total = p.infrastructureBank + funding;
+      p.infrastructureBank = Math.min(this.balance.economy.bankCap, total);
+      return Math.max(0, total - this.balance.economy.bankCap);
+    }
+    const costs = this.balance.infrastructure.costs,
+      times = this.balance.infrastructure.minimumSeconds,
+      cost = costs[r.level + 1],
+      available = p.infrastructureBank + funding,
+      spend = Math.min(
+        available,
+        cost - r.upgradeProgress,
+        (cost / times[r.level + 1]) * dt,
+      );
+    r.upgradeProgress += spend;
+    p.infrastructureBank = Math.min(
+      this.balance.economy.bankCap,
+      available - spend,
+    );
+    return Math.max(0, available - spend - this.balance.economy.bankCap);
+  }
+  productionEligible(
+    p,
+    r,
+    storageUsed = this.storageUsed(r),
+    storageCapacity = this.storageCap(r),
+  ) {
+    const treatment = this.balance.treatments[p.selectedTreatment],
+      overCapacity = storageUsed > storageCapacity + 1e-9;
+    return (
+      r.ownerId === p.id &&
+      r.level >= treatment.level &&
+      storageUsed < storageCapacity &&
+      !overCapacity
+    );
+  }
+  manufacture(p, funding, dt, owned) {
+    const key = p.selectedTreatment,
+      t = this.balance.treatments[key],
+      efficiency = p.completed.includes("R01")
+        ? this.balance.researchEffects.scaleUp
+        : this.balance.economy.productionEfficiency,
+      eligible = owned.filter((r) => this.productionEligible(p, r));
+    let remaining = funding,
+      accepted = 0;
+    const weighted = eligible.map((r) => ({
+      r,
+      w:
+        (p.productionPin === r.id ? this.balance.infrastructure.pinWeight : 1) *
+        (r.neighbours.some((n) => this.regions[n].ownerId !== p.id)
+          ? this.balance.infrastructure.borderWeight
+          : 1),
+      used: 0,
+    }));
+    while (remaining > 1e-9) {
+      const active = weighted.filter(
+        (x) =>
+          (this.balance.economy.productionBase +
+            this.balance.economy.productionPerLevel * x.r.level) *
+            dt -
+            x.used >
+            1e-9 && this.storageCap(x.r) - this.storageUsed(x.r) > 1e-9,
+      );
+      if (!active.length) break;
+      const total = active.reduce((s, x) => s + x.w, 0),
+        before = remaining;
+      for (const x of active) {
+        const share = (before * x.w) / total,
+          room = (this.storageCap(x.r) - this.storageUsed(x.r)) / efficiency,
+          cap =
+            (this.balance.economy.productionBase +
+              this.balance.economy.productionPerLevel * x.r.level) *
+              dt -
+            x.used,
+          take = Math.min(share, cap, room);
+        x.used += take;
+        x.r.inventories[key] += (take * efficiency) / t.cost;
+        remaining -= take;
+        accepted += take;
+      }
+      if (before - remaining < 1e-9) break;
+    }
+    if (accepted > 0 && !this.firstTreatmentOutput.has(key)) {
+      this.firstTreatmentOutput.add(key);
+      this.recordTelemetry("treatment-output", p, {
+        treatment: key,
+        units: (accepted * efficiency) / t.cost,
+      });
+    }
+    p.production = (accepted * efficiency) / t.cost / dt;
+    p.manufacturingSpend = accepted / dt;
+    p.unusedManufacturing = remaining / dt;
+    const metrics = this.companyTelemetry(p),
+      units = (accepted * efficiency) / t.cost;
+    metrics.treatmentOutput[key] += units;
+    metrics.factoryCreditSeconds += accepted;
+    metrics.redirectedFunding +=
+      (p.researchOverflow + p.infrastructureOverflow) * dt;
+    metrics.unusedFunding += remaining;
+    metrics.regionSeconds = p.regionSeconds;
+    this.telemetry.totals.treatmentOutput[key] += units;
+    this.telemetry.totals.factoryCreditSeconds += accepted;
+    this.telemetry.totals.redirectedFunding +=
+      (p.researchOverflow + p.infrastructureOverflow) * dt;
+    this.telemetry.totals.unusedFunding += remaining;
+  }
+  updateSchedulingFeedback(p) {
+    const active = this.activeResearch(p);
+    p.researchActive = active ?? null;
+    if (active) {
+      const project = this.balance.research[active],
+        remaining = project[2] - (p.researchProgress[active] || 0);
+      p.researchEta = p.researchSpend > 0 ? remaining / p.researchSpend : null;
+    } else p.researchEta = null;
+    const target = this.infrastructureTarget(p);
+    p.infrastructureActive = target?.region.id ?? null;
+    p.infrastructureReason = target?.reason ?? "all regions fully developed";
+    if (target) {
+      const costs = this.balance.infrastructure.costs,
+        remaining =
+          costs[target.region.level + 1] - target.region.upgradeProgress;
+      p.infrastructureEta =
+        p.infrastructureSpend > 0 ? remaining / p.infrastructureSpend : null;
+    } else p.infrastructureEta = null;
+  }
+  storageCap(r) {
+    return (
+      this.balance.infrastructure.storageBase +
+      this.balance.infrastructure.storagePerLevel * r.level
+    );
+  }
+  storageUsed(r) {
+    return KEYS.reduce(
+      (s, k) => s + r.inventories[k] * this.balance.treatments[k].cost,
+      0,
+    );
+  }
+  deliver(time) {
+    const arrivals = [];
+    for (const c of this.convoys)
+      while (c.dueAt <= time + 1e-9) {
+        const current = c.path[c.index];
+        if (
+          c.index > 0 &&
+          current !== c.targetId &&
+          this.regions[current].ownerId !== c.companyId
+        ) {
+          c.interrupted = true;
+          arrivals.push(c);
+          break;
+        }
+        const next = c.path[c.index + 1];
+        if (next == null) {
+          arrivals.push(c);
+          break;
+        }
+        c.index++;
+        if (next === c.targetId || this.regions[next].ownerId !== c.companyId) {
+          if (next !== c.targetId) c.interrupted = true;
+          arrivals.push(c);
+          break;
+        }
+        c.dueAt += c.edgeTime;
+      }
+    const groups = new Map();
+    for (const c of arrivals) {
+      this.convoys.splice(this.convoys.indexOf(c), 1);
+      const regionId = c.path[c.index],
+        key = `${regionId}:${c.companyId}`;
+      if (c.interrupted)
+        this.routeInterruptions.push({
+          id: `${c.id}:${regionId}`,
+          convoyId: c.id,
+          companyId: c.companyId,
+          regionId,
+          at: time,
+        });
+      if (!groups.has(key))
+        groups.set(key, {
+          region: this.regions[regionId],
+          companyId: c.companyId,
+          supply: this.emptyInventory(),
+          convoyIds: [],
+        });
+      const group = groups.get(key);
+      group.convoyIds.push(c.id);
+      for (const k of KEYS) group.supply[k] += c.supply[k];
+    }
+    for (const { region: r, companyId, supply, convoyIds } of groups.values()) {
+      const incoming = KEYS.reduce(
+        (s, k) => s + supply[k] * this.balance.treatments[k].cost,
+        0,
+      );
+      let admitted = incoming;
+      if (r.ownerId === companyId) admitted = this.unload(r, supply);
+      else {
+        r.campaigns[companyId] ??= this.emptyInventory();
+        for (const k of KEYS) r.campaigns[companyId][k] += supply[k];
+        r.quietTime = 0;
+      }
+      this.arrivalReports.push({
+        id: `${companyId}:${r.id}:${time}`,
+        companyId,
+        regionId: r.id,
+        convoyIds,
+        incomingCapacity: incoming,
+        admittedCapacity: admitted,
+        discardedCapacity: incoming - admitted,
+        disposition: incoming > admitted ? "excess_discarded" : "admitted",
+        at: time,
+      });
+    }
+    this.arrivalReports = this.arrivalReports.slice(-100);
+    this.routeInterruptions = this.routeInterruptions.slice(-100);
+    this.syncContests(time);
+  }
+  unload(r, supply) {
+    const free = Math.max(0, this.storageCap(r) - this.storageUsed(r)),
+      incoming = KEYS.reduce(
+        (s, k) => s + supply[k] * this.balance.treatments[k].cost,
+        0,
+      ),
+      admitted = Math.min(free, incoming),
+      scale = incoming ? admitted / incoming : 0;
+    for (const k of KEYS) r.inventories[k] += supply[k] * scale;
+    return admitted;
+  }
+  expireProgrammes(time) {
+    for (const r of this.regions)
+      if (r.programme) {
+        if (r.ownerId !== r.programme.companyId) {
+          r.programme = null;
+          continue;
+        }
+        if (r.programme.pending && r.programme.completesAt <= time) {
+          const p = this.players.get(r.ownerId),
+            advanced = p?.completed.includes("R10"),
+            duration = advanced
+              ? this.balance.programme.advancedDuration
+              : this.balance.programme.duration;
+          r.programme.pending = false;
+          r.programme.maxProtection = advanced
+            ? this.balance.programme.advancedProtection
+            : this.balance.programme.protection;
+          r.programme.protection = r.programme.maxProtection;
+          r.programme.expiresAt = r.programme.completesAt + duration;
+          r.programme.scheduledExpiryAt = r.programme.expiresAt;
+        }
+        if (!r.programme.pending && r.programme.expiresAt <= time)
+          r.programme = null;
+      }
+  }
+  regenerate(dt) {
+    for (const r of this.regions) {
+      if (
+        Object.keys(r.campaigns).some((id) => this.campaignForce(r, id) > 0)
+      ) {
+        r.quietTime = 0;
+        continue;
+      }
+      r.quietTime += dt;
+      if (r.quietTime > this.balance.contest.quietSeconds)
+        r.protection = Math.min(
+          r.ownerId
+            ? this.balance.contest.ownedProtectionBase +
+                this.balance.contest.ownedProtectionLevel * r.level
+            : this.balance.contest.neutralProtection,
+          r.protection +
+            (r.ownerId
+              ? this.balance.contest.ownedRegenerationBase +
+                this.balance.contest.ownedRegenerationLevel * r.level
+              : this.balance.contest.neutralRegeneration) *
+              dt,
+        );
+    }
+  }
+  campaignForce(r, id) {
+    const p = this.players.get(id);
+    return p
+      ? KEYS.reduce(
+          (s, k) => s + r.campaigns[id][k] * this.force(p, k, r.profile),
+          0,
+        )
+      : 0;
+  }
+  defenderForce(r) {
+    const p = this.players.get(r.ownerId);
+    return (
+      r.protection +
+      (r.programme?.protection || 0) +
+      (p
+        ? KEYS.reduce(
+            (s, k) => s + r.inventories[k] * this.force(p, k, r.profile, true),
+            0,
+          )
+        : 0)
+    );
+  }
+  resolveContests(dt, time) {
+    const changes = [];
+    for (const r of this.regions) {
+      let parties = [];
+      const df = this.defenderForce(r);
+      if (df > 0)
+        parties.push({ id: r.ownerId ?? "neutral", defender: true, force: df });
+      for (const id of Object.keys(r.campaigns)) {
+        const f = this.campaignForce(r, id);
+        if (f > 0) parties.push({ id, defender: false, force: f });
+      }
+      if (parties.length < 2) {
+        if (parties.length === 1 && !parties[0].defender)
+          changes.push({ r, winner: parties[0].id });
+        continue;
+      }
+      const losses = new Map();
+      for (const target of parties) {
+        let loss = 0;
+        for (const source of parties)
+          if (source !== target) {
+            const others = parties.reduce(
+              (s, x) => s + (x !== source ? x.force : 0),
+              0,
+            );
+            loss +=
+              ((this.balance.contest.forceShare * source.force +
+                Math.min(this.balance.contest.flatPressureCap, source.force)) *
+                target.force) /
+              others;
+          }
+        losses.set(target, Math.min(target.force, loss * dt));
+      }
+      for (const party of parties) {
+        const remain = party.force - losses.get(party);
+        if (party.defender)
+          this.consumeDefense(
+            r,
+            losses.get(party) +
+              (remain < this.balance.contest.exhaustedBelow
+                ? Math.max(0, remain)
+                : 0),
+          );
+        else
+          this.consumeCampaign(
+            r,
+            party.id,
+            losses.get(party) +
+              (remain < this.balance.contest.exhaustedBelow
+                ? Math.max(0, remain)
+                : 0),
+          );
+        party.remain =
+          remain < this.balance.contest.exhaustedBelow ? 0 : remain;
+      }
+      const defender = parties.find((x) => x.defender),
+        attackers = parties.filter((x) => !x.defender && x.remain > 0);
+      if (defender?.remain > 0) continue;
+      if (attackers.length === 1) changes.push({ r, winner: attackers[0].id });
+      else if (attackers.length > 1)
+        changes.push({ r, winner: null, disputed: true });
+    }
+    for (const change of changes)
+      this.capture(change.r, change.winner, time, change.disputed);
+    this.syncContests(time);
+  }
+  consumeDefense(r, loss) {
+    let left = loss;
+    if (r.programme) {
+      const before = r.programme.protection,
+        x = Math.min(left, before);
+      r.programme.protection -= x;
+      left -= x;
+      if (before > 0 && r.programme.protection <= 0)
+        this.recordTelemetry(
+          "programme-depleted",
+          this.players.get(r.programme.companyId),
+          { regionId: r.id },
+        );
+    }
+    const base = Math.min(left, r.protection);
+    r.protection -= base;
+    left -= base;
+    if (left > 0) {
+      const p = this.players.get(r.ownerId),
+        force = KEYS.reduce(
+          (s, k) =>
+            s + r.inventories[k] * (p ? this.force(p, k, r.profile, true) : 1),
+          0,
+        ),
+        ratio = force ? Math.min(1, left / force) : 0;
+      for (const k of KEYS) r.inventories[k] *= 1 - ratio;
+    }
+  }
+  consumeCampaign(r, id, loss) {
+    const force = this.campaignForce(r, id);
+    if (!force) return;
+    const ratio = Math.min(1, loss / force);
+    for (const k of KEYS) r.campaigns[id][k] *= 1 - ratio;
+    if (this.campaignForce(r, id) < this.balance.contest.exhaustedBelow)
+      delete r.campaigns[id];
+  }
+  capture(r, winner, time, disputed = false) {
+    const old = r.ownerId;
+    if (winner === old) return;
+    if (old !== null || winner !== null)
+      this.telemetry.events.push({
+        type: "region-change",
+        at: time,
+        regionId: r.id,
+        fromCompanyId: old,
+        toCompanyId: winner,
+        disputed,
+      });
+    const supply = winner ? r.campaigns[winner] : null;
+    r.ownerId = winner;
+    r.upgradeProgress = 0;
+    r.inventories = this.emptyInventory();
+    r.protection = 0;
+    r.programme = null;
+    r.quietTime = 0;
+    r.disputed = disputed;
+    if (disputed) {
+      r.acquiredAt = null;
+      return;
+    }
+    r.level = Math.max(0, r.level - 1);
+    if (supply) r.inventories = { ...supply };
+    r.campaigns = {};
+    r.acquiredAt = winner ? time : null;
+    r.dispatchAvailableAt = time + this.balance.movement.captureCooldown;
+  }
+  syncContests(at = this.elapsed) {
+    const activeRegions = new Set();
+    this.contests.clear();
+    for (const r of this.regions)
+      for (const id of Object.keys(r.campaigns)) {
+        this.contests.set(`${r.id}:${id}`, {
+          regionId: r.id,
+          attackerId: id,
+          power: this.campaignForce(r, id),
+          defense: this.defenderForce(r),
+        });
+        activeRegions.add(r.id);
+      }
+    for (const regionId of activeRegions)
+      if (!this.contestEpisodes.has(regionId)) {
+        this.contestEpisodes.set(regionId, at);
+        const r = this.regions[regionId],
+          attackers = Object.keys(r.campaigns);
+        this.recordTelemetry("contest-start", null, {
+          at,
+          regionId,
+          rivalContest:
+            r.ownerId != null && attackers.some((id) => id !== r.ownerId),
+        });
+      }
+    for (const [regionId, startedAt] of this.contestEpisodes)
+      if (!activeRegions.has(regionId)) {
+        this.recordTelemetry("contest-end", null, {
+          at,
+          regionId,
+          duration: Math.max(0, at - startedAt),
+        });
+        this.contestEpisodes.delete(regionId);
+      }
+  }
+  applyCompletions() {
+    for (const p of this.players.values()) {
+      for (const id of Object.keys(p.researchProgress))
+        if (
+          !p.completed.includes(id) &&
+          p.researchProgress[id] >= this.balance.research[id][2] - 1e-8
+        ) {
+          p.completed.push(id);
+          this.recordTelemetry("research-complete", p, { project: id });
+          this.companyTelemetry(p).research = p.research;
+          this.companyTelemetry(p).completedResearch = p.completed.length;
+          if (id === "R04" && !p.targetedIndications.includes(p.specialty))
+            p.targetedIndications.push(p.specialty);
+          if (
+            id === "R05" &&
+            p.r05Choice &&
+            !p.targetedIndications.includes(p.r05Choice)
+          )
+            p.targetedIndications.push(p.r05Choice);
+          p.unlocked = this.unlocks(p);
+        }
+    }
+    for (const r of this.regions) {
+      const costs = this.balance.infrastructure.costs;
+      if (
+        r.level < this.balance.infrastructure.maxLevel &&
+        r.upgradeProgress >= costs[r.level + 1] - 1e-8
+      ) {
+        r.level++;
+        r.upgradeProgress = 0;
+      }
+    }
+  }
+  clearInvalidPins() {
+    for (const p of this.players.values())
+      for (const kind of ["production", "development"])
+        if (this.regions[p[`${kind}Pin`]]?.ownerId !== p.id)
+          p[`${kind}Pin`] = null;
+  }
+  eliminate() {
+    for (const p of this.players.values())
+      if (
+        p.started &&
+        !p.eliminated &&
+        !this.regions.some((r) => r.ownerId === p.id)
+      ) {
+        p.eliminated = true;
+        this.companyTelemetry(p).eliminatedAt = this.elapsed;
+        this.recordTelemetry("elimination", p);
+        this.convoys = this.convoys.filter((c) => c.companyId !== p.id);
+        for (const r of this.regions) delete r.campaigns[p.id];
+      }
+  }
+  inventoryForce(p, r, profile = r.profile) {
+    return KEYS.reduce(
+      (sum, key) => sum + r.inventories[key] * this.force(p, key, profile),
+      0,
+    );
+  }
+  botThreats(p) {
+    return this.owned(p)
+      .map((region) => {
+        const campaigns = Object.entries(region.campaigns)
+            .filter(([id]) => id !== p.id)
+            .reduce((sum, [id]) => sum + this.campaignForce(region, id), 0),
+          incoming = this.convoys
+            .filter((c) => c.companyId !== p.id && c.targetId === region.id)
+            .reduce((sum, c) => sum + c.capacity, 0),
+          rivals = region.neighbours
+            .map((id) => this.regions[id])
+            .filter((r) => r.ownerId && r.ownerId !== p.id),
+          rivalForce = rivals.reduce(
+            (max, r) => Math.max(max, this.defenderForce(r)),
+            0,
+          ),
+          defense = this.defenderForce(region);
+        return {
+          region,
+          score: campaigns + incoming + Math.max(0, rivalForce - defense),
+          urgent:
+            campaigns > 0 ||
+            incoming > 0 ||
+            rivalForce >= defense * this.balance.bots.threatRatio,
+        };
+      })
+      .filter((x) => x.urgent)
+      .sort((a, b) => b.score - a.score || a.region.id - b.region.id);
+  }
+  launchExactVac(p, from, target) {
+    if (
+      from.ownerId !== p.id ||
+      target.ownerId !== p.id ||
+      from.inventories.vaccine < this.balance.programme.vaccineUnits ||
+      this.elapsed < from.dispatchAvailableAt ||
+      this.convoys.filter((c) => c.companyId === p.id).length >=
+        this.balance.movement.convoySlots
+    )
+      return false;
+    const path = this.path(from.id, target.id, p.id);
+    if (!path || path.length < 2) return false;
+    const supply = this.emptyInventory();
+    supply.vaccine = this.balance.programme.vaccineUnits;
+    from.inventories.vaccine -= this.balance.programme.vaccineUnits;
+    const edgeTime =
+      this.balance.treatments.vaccine.edgeTime *
+      (p.completed.includes("R11")
+        ? this.balance.researchEffects.logistics
+        : 1);
+    this.convoys.push({
+      id: this.id(),
+      companyId: p.id,
+      sourceId: from.id,
+      targetId: target.id,
+      path,
+      index: 0,
+      supply,
+      capacity:
+        this.balance.programme.vaccineUnits *
+        this.balance.treatments.vaccine.cost,
+      edgeTime,
+      dueAt: this.elapsed + edgeTime,
+      createdAt: this.elapsed,
+      objective: "programme",
+    });
+    from.dispatchAvailableAt =
+      this.elapsed + this.balance.movement.dispatchCooldown;
+    return true;
+  }
+  manageBotStrategy(p) {
+    p.allocation = { ...BUDGET_PRESETS.balanced };
+    const order =
+      this.balance.bots.researchOrders[
+        p.botSlot % this.balance.bots.researchOrders.length
+      ];
+    p.researchQueue = [
+      ...order.filter((id) => !p.completed.includes(id)),
+      ...p.researchQueue.filter(
+        (id) => !order.includes(id) && !p.completed.includes(id),
+      ),
+    ];
+    const borders = this.owned(p).filter((r) =>
+        r.neighbours.some((id) => this.regions[id].ownerId !== p.id),
+      ),
+      profiles = borders.length ? borders.map((r) => r.profile) : [p.specialty];
+    const ranked = this.unlocks(p)
+      .map((key) => ({
+        key,
+        value:
+          profiles.reduce(
+            (sum, profile) =>
+              sum +
+              this.force(p, key, profile) / this.balance.treatments[key].cost,
+            0,
+          ) / profiles.length,
+      }))
+      .sort(
+        (a, b) =>
+          b.value - a.value || KEYS.indexOf(a.key) - KEYS.indexOf(b.key),
+      );
+    let choice = ranked[0]?.key ?? "medicine";
+    if (
+      this.balance.treatments[choice].level === 2 &&
+      !this.owned(p).some((r) => r.level >= 2)
+    ) {
+      const candidate = this.owned(p)
+        .filter((r) => r.level < 2)
+        .sort((a, b) => b.level - a.level || a.id - b.id)[0];
+      p.developmentPin = candidate?.id ?? null;
+      choice =
+        ranked.find((x) => this.balance.treatments[x.key].level <= 1)?.key ??
+        "medicine";
+    }
+    if (p.programmeObjective == null)
+      this.transitionTreatment(p, choice, false);
+  }
+  runBotTactical(p) {
+    const threats = this.botThreats(p);
+    if (
+      p.programmeObjective != null &&
+      !threats.some(
+        (x) => x.region.id === p.programmeObjective && !x.region.programme,
+      )
+    )
+      p.programmeObjective = null;
+    if (p.completed.includes("R09") && threats.length) {
+      const target = threats.find((x) => !x.region.programme)?.region;
+      if (target) {
+        p.programmeObjective = target.id;
+        if (
+          target.inventories.vaccine >= this.balance.programme.vaccineUnits &&
+          this.activateProgramme(p, target.id)
+        ) {
+          p.programmeObjective = null;
+          return { type: "programme", regionId: target.id };
+        }
+        const source = this.owned(p)
+          .filter(
+            (r) =>
+              r.id !== target.id &&
+              r.inventories.vaccine >= this.balance.programme.vaccineUnits &&
+              this.path(r.id, target.id, p.id),
+          )
+          .sort(
+            (a, b) =>
+              this.path(a.id, target.id, p.id).length -
+                this.path(b.id, target.id, p.id).length || a.id - b.id,
+          )[0];
+        if (source && this.launchExactVac(p, source, target))
+          return {
+            type: "programme-supply",
+            fromId: source.id,
+            regionId: target.id,
+            units: this.balance.programme.vaccineUnits,
+          };
+        this.transitionTreatment(p, "vaccine", false);
+        const factory = this.owned(p)
+          .filter((r) => r.level >= 2)
+          .sort((a, b) => a.id - b.id)[0];
+        if (factory) p.productionPin = factory.id;
+        else
+          p.developmentPin =
+            this.owned(p).sort((a, b) => b.level - a.level || a.id - b.id)[0]
+              ?.id ?? null;
+      }
+    }
+    const reinforcements = [];
+    for (const threat of threats)
+      for (const source of this.owned(p)) {
+        if (source.id === threat.region.id) continue;
+        const path = this.path(source.id, threat.region.id, p.id);
+        if (!path) continue;
+        const keys = KEYS.filter((k) => source.inventories[k] > 0),
+          edge =
+            Math.max(
+              ...keys.map((k) => this.balance.treatments[k].edgeTime),
+              3,
+            ) *
+            (p.completed.includes("R11")
+              ? this.balance.researchEffects.logistics
+              : 1),
+          arrival = (path.length - 1) * edge,
+          capacity = this.storageUsed(source) * this.balance.bots.retainedShare;
+        if (
+          arrival <= this.balance.bots.reinforcementArrivalSeconds &&
+          capacity >= this.balance.movement.minimumPacket
+        )
+          reinforcements.push({
+            source,
+            target: threat.region,
+            arrival,
+            score: threat.score,
+          });
+      }
+    reinforcements.sort(
+      (a, b) =>
+        b.score - a.score ||
+        a.arrival - b.arrival ||
+        a.target.id - b.target.id ||
+        a.source.id - b.source.id,
+    );
+    for (const x of reinforcements)
+      if (
+        this.dispatch(
+          p,
+          x.source.id,
+          x.target.id,
+          this.balance.bots.reinforcementCommitment,
+          "all",
+        )
+      )
+        return {
+          type: "reinforce",
+          fromId: x.source.id,
+          toId: x.target.id,
+          commitment: this.balance.bots.reinforcementCommitment,
+          arrival: x.arrival,
+        };
+    const attacks = [];
+    for (const source of this.owned(p).sort((a, b) => a.id - b.id))
+      for (const id of source.neighbours) {
+        const target = this.regions[id];
+        if (target.ownerId === p.id) continue;
+        const available = this.inventoryForce(p, source, target.profile);
+        for (const share of this.balance.bots.packetShares) {
+          const commitment = share * 100;
+          const force = (available * commitment) / 100,
+            defense = this.defenderForce(target),
+            ratio = target.ownerId
+              ? this.balance.bots.rivalRatio
+              : this.balance.bots.neutralRatio,
+            owner = this.players.get(target.ownerId),
+            production = owner
+              ? ((this.balance.economy.productionBase +
+                  this.balance.economy.productionPerLevel * target.level) *
+                  (owner.completed.includes("R01")
+                    ? this.balance.researchEffects.scaleUp
+                    : this.balance.economy.productionEfficiency) *
+                  this.force(owner, owner.selectedTreatment, target.profile)) /
+                this.balance.treatments[owner.selectedTreatment].cost
+              : 0,
+            pressure =
+              this.balance.contest.forceShare * force +
+              Math.min(this.balance.contest.flatPressureCap, force);
+          if (force >= defense * ratio && pressure > production)
+            attacks.push({
+              source,
+              target,
+              commitment,
+              ratio: defense ? force / defense : Infinity,
+            });
+        }
+      }
+    attacks.sort(
+      (a, b) =>
+        a.target.id - b.target.id ||
+        a.source.id - b.source.id ||
+        a.commitment - b.commitment ||
+        b.ratio - a.ratio,
+    );
+    for (const x of attacks)
+      if (this.dispatch(p, x.source.id, x.target.id, x.commitment, "all"))
+        return {
+          type: "attack",
+          fromId: x.source.id,
+          toId: x.target.id,
+          commitment: x.commitment,
+          ratio: x.ratio,
+        };
+    return null;
+  }
+  runBots() {
+    for (const p of this.players.values()) {
+      if (
+        !p.bot ||
+        p.eliminated ||
+        !p.started ||
+        this.elapsed + 1e-9 < p.nextBotAt
+      )
+        continue;
+      p.nextBotAt += this.balance.bots.evaluationSeconds;
+      if (p.nextBotAt <= this.elapsed)
+        p.nextBotAt = this.elapsed + this.balance.bots.evaluationSeconds;
+      this.manageBotStrategy(p);
+      p.botAction = this.runBotTactical(p);
+    }
+  }
+  checkVictory(dt) {
+    const alive = [...this.players.values()].filter(
+        (p) => p.started && !p.eliminated,
+      ),
+      counts = alive
+        .map((p) => ({ player: p, count: this.owned(p).length }))
+        .sort(
+          (a, b) =>
+            b.count - a.count ||
+            b.player.regionSeconds - a.player.regionSeconds ||
+            a.player.id.localeCompare(b.player.id),
+        );
+    if (
+      alive.length === 1 &&
+      [...this.players.values()].filter((p) => p.started).length > 1
+    ) {
+      this.finish([alive[0]], "last-standing");
+      return;
+    }
+    const leader = counts[0],
+      threshold = Math.ceil(
+        this.balance.match.dominanceShare * this.regions.length,
+      );
+    if (leader?.count >= threshold) {
+      if (this.holdLeader === leader.player.id) this.holdSeconds += dt;
+      else {
+        this.holdLeader = leader.player.id;
+        this.holdSeconds = 0;
+      }
+      if (this.holdSeconds >= this.balance.match.dominanceSeconds) {
+        this.finish([leader.player], "dominance");
+        return;
+      }
+    } else {
+      this.holdLeader = null;
+      this.holdSeconds = 0;
+    }
+    if (this.elapsed >= this.matchSeconds && leader?.count > 0) {
+      const winners = counts
+        .filter(
+          (x) =>
+            x.count === leader.count &&
+            Math.abs(x.player.regionSeconds - leader.player.regionSeconds) <
+              1e-9,
+        )
+        .map((x) => x.player);
+      this.finish(winners, "timed");
+    }
+  }
+  finish(players, type) {
+    const winners = Array.isArray(players) ? players : [players];
+    this.winner = winners[0].id;
+    this.result = { type, winners: winners.map((p) => p.id), at: this.elapsed };
+    this.telemetry.victory = { ...this.result };
+    this.recordTelemetry("victory", winners[0], {
+      victoryType: type,
+      winners: this.result.winners,
+    });
+    this.phase = PHASES.FINISHED;
+    this.finishedAt = this.now();
+  }
+  snapshot() {
+    const threshold = Math.ceil(
+        this.balance.match.dominanceShare * this.regions.length,
+      ),
+      players = [...this.players.values()].map(({ credential, ...p }) => ({
+        ...p,
+        controlState: p.surrendered
+          ? "surrendered"
+          : p.eliminated
+            ? "eliminated"
+            : p.bot
+              ? "automated"
+              : p.connected
+                ? "connected"
+                : "disconnected",
+        ownRegionCount: this.owned(p).length,
+        effectiveSpending: {
+          research: p.researchSpend,
+          manufacturing: p.manufacturingSpend,
+          infrastructure: p.infrastructureSpend,
+        },
+        overflows: {
+          research: p.researchOverflow,
+          infrastructure: p.infrastructureOverflow,
+          total: p.overflow,
+        },
+        dominance: {
+          regions: this.owned(p).length,
+          threshold,
+          holding: this.holdLeader === p.id,
+          seconds: this.holdLeader === p.id ? this.holdSeconds : 0,
+          requiredSeconds: this.balance.match.dominanceSeconds,
+        },
+        dispatchStatus: {
+          convoySlotsUsed: this.convoys.filter((c) => c.companyId === p.id)
+            .length,
+          convoySlots: this.balance.movement.convoySlots,
+          foreignTargetsUsed: this.foreignTargets(p).size,
+          foreignTargetSlots: Math.min(
+            this.balance.movement.foreignMaxSlots,
+            this.balance.movement.foreignBaseSlots +
+              Math.floor(
+                this.owned(p).length / this.balance.movement.foreignSlotRegions,
+              ),
+          ),
+          targetCommitments: Object.fromEntries(
+            this.regions
+              .map((r) => [r.id, this.targetCommitment(p.id, r.id)])
+              .filter(([, value]) => value > 0),
+          ),
+        },
+      }));
+    const regions = this.regions.map((r) => {
+      const storageUsed = this.storageUsed(r),
+        storageCapacity = this.storageCap(r),
+        owner = this.players.get(r.ownerId),
+        contestParties = [];
+      if (this.defenderForce(r) > 0)
+        contestParties.push({
+          companyId: r.ownerId,
+          label: owner?.initials ?? "N",
+          role: "incumbent",
+          force: this.defenderForce(r),
+        });
+      for (const id of Object.keys(r.campaigns)) {
+        const company = this.players.get(id),
+          force = this.campaignForce(r, id);
+        if (force > 0)
+          contestParties.push({
+            companyId: id,
+            label: company?.initials ?? "?",
+            role: "campaign",
+            force,
+          });
+      }
+      return {
+        ...r,
+        storageUsed,
+        storageCapacity,
+        overCapacity: storageUsed > storageCapacity + 1e-9,
+        productionEligible:
+          Boolean(owner) &&
+          this.productionEligible(owner, r, storageUsed, storageCapacity),
+        commissioningRemaining: Math.max(
+          0,
+          r.acquiredAt == null
+            ? 0
+            : r.acquiredAt +
+                this.balance.economy.commissioningSeconds -
+                this.elapsed,
+        ),
+        productionFocused: owner?.productionPin === r.id,
+        developmentFocused: owner?.developmentPin === r.id,
+        dispatchRemaining: Math.max(0, r.dispatchAvailableAt - this.elapsed),
+        contestParties,
+      };
+    });
+    return {
+      version: this.balance.version,
+      balance: this.balance,
+      acceptance: acceptanceCoverage(),
+      releaseGate: publishedReleaseGate(),
+      seed: this.seed,
+      phase: this.phase,
+      lobbySize: this.lobbySize,
+      placementRemaining: this.placementRemaining,
+      pads: this.pads,
+      availablePads: this.pads.filter(
+        (id) => this.regions[id].ownerId === null,
+      ),
+      reservedPads: this.pads.filter((id) => this.regions[id].ownerId !== null),
+      map: this.map,
+      profiles: PROFILES,
+      treatments: this.balance.treatments,
+      research: this.balance.research,
+      researchOrder: [...DEFAULT_RESEARCH],
+      elapsed: this.elapsed,
+      remaining: Math.max(0, this.matchSeconds - this.elapsed),
+      winner: this.winner,
+      result: this.result,
+      hold: {
+        playerId: this.holdLeader,
+        seconds: this.holdSeconds,
+        threshold,
+        requiredSeconds: this.balance.match.dominanceSeconds,
+      },
+      commandOutcomes: this.commandLog
+        .slice(-100)
+        .map(({ message, ...entry }) => ({
+          ...entry,
+          type: entry.type ?? message?.type,
+        })),
+      players,
+      regions,
+      convoys: this.convoys,
+      contests: [...this.contests.values()],
+      arrivalReports: this.arrivalReports,
+      routeInterruptions: this.routeInterruptions,
+      telemetry: this.telemetry,
+      playtest: buildPlaytestReport(this.telemetry, {
+        elapsed: this.elapsed,
+        result: this.result,
+      }),
+      leaderboard: players
+        .map((p) => ({
+          id: p.id,
+          name: p.name,
+          color: p.color,
+          initials: p.initials,
+          regions: p.ownRegionCount,
+          regionSeconds: p.regionSeconds,
+        }))
+        .sort(
+          (a, b) =>
+            b.regions - a.regions ||
+            b.regionSeconds - a.regionSeconds ||
+            a.name.localeCompare(b.name),
+        )
+        .slice(0, 10),
+    };
+  }
 }
 
 /** Re-simulate an exported active match and compare every fixed-step boundary. */
 export function replayMatch(record) {
-  if (!record || record.format !== 1) throw new TypeError('Invalid replay record');
-  if(!Array.isArray(record.boundaries)||!Array.isArray(record.commands)||!Array.isArray(record.companies))throw new TypeError('Invalid replay record');
-  if(record.step!=null&&record.step!==STEP)throw new TypeError('Unsupported replay step');
+  if (!record || record.format !== 1)
+    throw new TypeError("Invalid replay record");
+  if (
+    !Array.isArray(record.boundaries) ||
+    !Array.isArray(record.commands) ||
+    !Array.isArray(record.companies)
+  )
+    throw new TypeError("Invalid replay record");
+  if (record.step != null && record.step !== STEP)
+    throw new TypeError("Unsupported replay step");
   getBalance(record.balanceVersion);
-  const ids=[];for(const company of record.companies)ids.push(company.id,`replay-credential-${company.id}`);let generated=0;
-  const official=MAP_TEMPLATES[record.lobbySize],custom=official.columns!==record.columns||official.rows!==record.rows;const game=new Game({seed:record.seed,lobbySize:record.lobbySize,matchSeconds:record.matchSeconds,placementSeconds:record.placementSeconds,balanceVersion:record.balanceVersion,...(custom?{columns:record.columns,rows:record.rows}:{}),random:()=>.5,id:()=>ids.shift()??`replay-object-${++generated}`});
-  for(const company of record.companies){const player=game.addPlayer(company.name,{bot:company.bot});player.botSlot=company.botSlot;if(company.initialRegionId!=null)game.start(player,company.initialRegionId,company.specialty);}
-  if(game.phase!==PHASES.ACTIVE){game.phase=PHASES.ACTIVE;game.elapsed=0;}
-  const commands=[...record.commands].sort((a,b)=>a.processedAt-b.processedAt),differences=[];
-  const finalAt=record.result?.at??record.boundaries.at(-1)?.at??0,expectedCount=Math.round(finalAt/STEP);
-  for(let index=0;index<expectedCount;index++){
-    while(commands[0]&&commands[0].processedAt<=game.elapsed+1e-9){const item=commands.shift();game.handle(item.companyId,{...item.message});}
-    const expected=record.boundaries[index],at=(index+1)*STEP;
-    if(!expected||!Number.isFinite(expected.at)||Math.abs(expected.at-at)>1e-9){differences.push({index,at});break;}
-    game.tick(STEP);const actual=game.boundarySnapshots[index];
-    if(JSON.stringify(actual)!==JSON.stringify(expected)){differences.push({index,at});break;}
+  const ids = [];
+  for (const company of record.companies)
+    ids.push(company.id, `replay-credential-${company.id}`);
+  let generated = 0;
+  const official = MAP_TEMPLATES[record.lobbySize],
+    custom =
+      official.columns !== record.columns || official.rows !== record.rows;
+  const game = new Game({
+    seed: record.seed,
+    lobbySize: record.lobbySize,
+    matchSeconds: record.matchSeconds,
+    placementSeconds: record.placementSeconds,
+    balanceVersion: record.balanceVersion,
+    ...(custom ? { columns: record.columns, rows: record.rows } : {}),
+    random: () => 0.5,
+    id: () => ids.shift() ?? `replay-object-${++generated}`,
+  });
+  for (const company of record.companies) {
+    const player = game.addPlayer(company.name, { bot: company.bot });
+    player.botSlot = company.botSlot;
+    if (company.initialRegionId != null)
+      game.start(player, company.initialRegionId, company.specialty);
   }
-  if(!differences.length&&record.boundaries.length!==expectedCount)differences.push({index:expectedCount,at:(expectedCount+1)*STEP});
-  if(!differences.length&&JSON.stringify(game.result)!==JSON.stringify(record.result))differences.push({index:expectedCount,at:finalAt});
-  return {ok:differences.length===0,differences,verifiedBoundaries:differences.length?differences[0].index:expectedCount,expectedBoundaries:expectedCount,game,actualResult:game.result,expectedResult:record.result};
+  if (game.phase !== PHASES.ACTIVE) {
+    game.phase = PHASES.ACTIVE;
+    game.elapsed = 0;
+  }
+  const commands = [...record.commands].sort(
+      (a, b) => a.processedAt - b.processedAt,
+    ),
+    differences = [];
+  const finalAt = record.result?.at ?? record.boundaries.at(-1)?.at ?? 0,
+    expectedCount = Math.round(finalAt / STEP);
+  for (let index = 0; index < expectedCount; index++) {
+    while (commands[0] && commands[0].processedAt <= game.elapsed + 1e-9) {
+      const item = commands.shift();
+      game.handle(item.companyId, { ...item.message });
+    }
+    const expected = record.boundaries[index],
+      at = (index + 1) * STEP;
+    if (
+      !expected ||
+      !Number.isFinite(expected.at) ||
+      Math.abs(expected.at - at) > 1e-9
+    ) {
+      differences.push({ index, at });
+      break;
+    }
+    game.tick(STEP);
+    const actual = game.boundarySnapshots[index];
+    if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+      differences.push({ index, at });
+      break;
+    }
+  }
+  if (!differences.length && record.boundaries.length !== expectedCount)
+    differences.push({ index: expectedCount, at: (expectedCount + 1) * STEP });
+  if (
+    !differences.length &&
+    JSON.stringify(game.result) !== JSON.stringify(record.result)
+  )
+    differences.push({ index: expectedCount, at: finalAt });
+  return {
+    ok: differences.length === 0,
+    differences,
+    verifiedBoundaries: differences.length
+      ? differences[0].index
+      : expectedCount,
+    expectedBoundaries: expectedCount,
+    game,
+    actualResult: game.result,
+    expectedResult: record.result,
+  };
 }

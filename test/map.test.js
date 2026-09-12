@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createSeededMap, MAP_TEMPLATES, REGION_PROFILES } from '../server/map.js';
-import { hexGeometry, pointInHex } from '../public/hex.js';
+import { hexGeometry, pointInHex } from '../client/hex.js';
 
 function graphDistances(regions, source) {
   const distances=Array(regions.length).fill(Infinity);distances[source]=0;const queue=[source];

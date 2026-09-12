@@ -1,36 +1,344 @@
 #!/usr/bin/env node
-import { spawn } from 'node:child_process';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { BALANCE } from './balance.js';
-import { MVP_ACCEPTANCE_SCENARIOS } from './acceptance.js';
-import { loadArtifacts, verifyArtifacts } from './playtest-runner.js';
-import { CAMPAIGN_CRITERIA } from './playtest.js';
-import { evaluateReleaseGate, RELEASE_ARTIFACT_URL, RELEASE_EVIDENCE_VERSION, RELEASE_GATE } from './release.js';
-import { runBrowserChecks } from './browser-runner.js';
-import { runLoadCheck } from './load-runner.js';
+import { spawn } from "node:child_process";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { BALANCE } from "./balance.js";
+import { MVP_ACCEPTANCE_SCENARIOS } from "./acceptance.js";
+import { loadArtifacts, verifyArtifacts } from "./playtest-runner.js";
+import { CAMPAIGN_CRITERIA } from "./playtest.js";
+import {
+  evaluateReleaseGate,
+  RELEASE_ARTIFACT_URL,
+  RELEASE_EVIDENCE_VERSION,
+  RELEASE_GATE,
+} from "./release.js";
+import { runBrowserChecks } from "./browser-runner.js";
+import { runLoadCheck } from "./load-runner.js";
 
-const command=(cmd,args,env={})=>new Promise(resolve=>{const startedAt=new Date().toISOString(),child=spawn(cmd,args,{env:{...process.env,...env},stdio:['ignore','pipe','pipe']});let stdout='',stderr='';child.stdout.on('data',x=>stdout+=x);child.stderr.on('data',x=>stderr+=x);child.on('close',exitCode=>resolve({command:[cmd,...args].join(' '),startedAt,finishedAt:new Date().toISOString(),exitCode,stdout,stderr}));});
-const artifact=(checkClass,lobbySize,run,extra={})=>({schemaVersion:RELEASE_EVIDENCE_VERSION,checkClass,lobbySize,balanceVersion:BALANCE.version,command:run.command,startedAt:run.startedAt,finishedAt:run.finishedAt,exitCode:run.exitCode,success:run.exitCode===0,assertions:{total:extra.total??1,passed:run.exitCode===0?(extra.total??1):0},...extra});
-const testFiles={unit:['test/game.test.js','test/map.test.js','test/playtest.test.js'],integration:['test/integration-lobby.test.js','test/app.test.js','test/economy-research.test.js','test/logistics-contests.test.js','test/automation-programmes.test.js','test/interface.test.js','test/balance-telemetry-replay.test.js','test/playtest-runner.test.js']};
-export const parseAcceptanceResults=stdout=>(stdout.trim()?stdout.trim().split(/\r?\n/):[]).flatMap(line=>{try{const result=JSON.parse(line);return result.type==='acceptance-scenario-pass'&&Number.isInteger(result.scenarioId)?[result.scenarioId]:[];}catch{return [];}});
+const command = (cmd, args, env = {}) =>
+  new Promise((resolve) => {
+    const startedAt = new Date().toISOString(),
+      child = spawn(cmd, args, {
+        env: { ...process.env, ...env },
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+    let stdout = "",
+      stderr = "";
+    child.stdout.on("data", (x) => (stdout += x));
+    child.stderr.on("data", (x) => (stderr += x));
+    child.on("close", (exitCode) =>
+      resolve({
+        command: [cmd, ...args].join(" "),
+        startedAt,
+        finishedAt: new Date().toISOString(),
+        exitCode,
+        stdout,
+        stderr,
+      }),
+    );
+  });
+const artifact = (checkClass, lobbySize, run, extra = {}) => ({
+  schemaVersion: RELEASE_EVIDENCE_VERSION,
+  checkClass,
+  lobbySize,
+  balanceVersion: BALANCE.version,
+  command: run.command,
+  startedAt: run.startedAt,
+  finishedAt: run.finishedAt,
+  exitCode: run.exitCode,
+  success: run.exitCode === 0,
+  assertions: {
+    total: extra.total ?? 1,
+    passed: run.exitCode === 0 ? (extra.total ?? 1) : 0,
+  },
+  ...extra,
+});
+const testFiles = {
+  unit: ["test/game.test.js", "test/map.test.js", "test/playtest.test.js"],
+  integration: [
+    "test/integration-lobby.test.js",
+    "test/app.test.js",
+    "test/economy-research.test.js",
+    "test/logistics-contests.test.js",
+    "test/automation-programmes.test.js",
+    "test/interface.test.js",
+    "test/balance-telemetry-replay.test.js",
+    "test/playtest-runner.test.js",
+  ],
+};
+export const parseAcceptanceResults = (stdout) =>
+  (stdout.trim() ? stdout.trim().split(/\r?\n/) : []).flatMap((line) => {
+    try {
+      const result = JSON.parse(line);
+      return result.type === "acceptance-scenario-pass" &&
+        Number.isInteger(result.scenarioId)
+        ? [result.scenarioId]
+        : [];
+    } catch {
+      return [];
+    }
+  });
 
-export function parseDeviationReview(markdown){
-  const match=markdown.match(/<!-- accepted-deviations:(\{[^\n]+\}) -->/);if(!match)return {source:'GAMEPLAY_SPEC.md',valid:false,none:false,acceptedCount:0,failures:['missing machine-readable declaration']};
-  try{const value=JSON.parse(match[1]);if(value.none===true&&Array.isArray(value.deviations)&&value.deviations.length===0)return {source:'GAMEPLAY_SPEC.md',valid:true,none:true,acceptedCount:0,failures:[]};const required=['id','rationale','affectedRule','decision','regressionCoverage'],valid=Array.isArray(value.deviations)&&value.deviations.length>0&&value.deviations.every(x=>required.every(k=>typeof x[k]==='string'&&x[k].trim()));return {source:'GAMEPLAY_SPEC.md',valid,none:false,acceptedCount:value.deviations?.length??0,failures:valid?[]:['malformed deviation']};}catch{return {source:'GAMEPLAY_SPEC.md',valid:false,none:false,acceptedCount:0,failures:['invalid JSON declaration']};}
-}
-
-export async function runReleaseGate(){
-  const startedAt=new Date().toISOString(),artifacts=[],failures=[];
-  for(const size of RELEASE_GATE.lobbySizes){
-    for(const checkClass of ['unit','integration']){const run=await command(process.execPath,['--test',...testFiles[checkClass]],{LOBBY_SIZE:String(size)});artifacts.push(artifact(checkClass,size,run,{total:1}));if(run.exitCode)failures.push(`${checkClass}/${size}: ${run.stderr||run.stdout}`);}
-    const acceptanceRun=await command(process.execPath,['--test','--test-reporter=./server/acceptance-reporter.js','test/mvp-acceptance.test.js'],{LOBBY_SIZE:String(size)}),scenarioIds=parseAcceptanceResults(acceptanceRun.stdout);artifacts.push(artifact('acceptance',size,acceptanceRun,{total:scenarioIds.length,scenarioIds}));if(acceptanceRun.exitCode)failures.push(`acceptance/${size}`);
-    const browserStart=new Date().toISOString();try{const report=await runBrowserChecks(size),run={command:`LOBBY_SIZE=${size} node server/browser-runner.js`,startedAt:browserStart,finishedAt:new Date().toISOString(),exitCode:report.success?0:1};const browserAssertions=report.assertions.filter(x=>!x.id.includes('accessible')&&!['keyboard-map-and-focus','live-announcements','non-colour-cues','automated-accessibility-rules'].includes(x.id));const accessibilityAssertions=report.assertions.filter(x=>!browserAssertions.includes(x));artifacts.push(artifact('browser',size,run,{total:browserAssertions.length,assertions:{total:browserAssertions.length,passed:browserAssertions.filter(x=>x.pass).length,results:browserAssertions},renderedPage:report.renderedPage,serverStateObserved:report.serverStateObserved}));artifacts.push(artifact('accessibility',size,run,{total:accessibilityAssertions.length,assertions:{total:accessibilityAssertions.length,passed:accessibilityAssertions.filter(x=>x.pass).length,results:accessibilityAssertions},viewport:report.viewport,axe:true}));}catch(error){failures.push(`browser/${size}: ${error.message}`);const run={command:`LOBBY_SIZE=${size} node server/browser-runner.js`,startedAt:browserStart,finishedAt:new Date().toISOString(),exitCode:1};artifacts.push(artifact('browser',size,run));artifacts.push(artifact('accessibility',size,run));}
-    const loadStart=new Date().toISOString(),load=await runLoadCheck(size),loadRun={command:`LOBBY_SIZE=${size} node server/load-runner.js`,startedAt:loadStart,finishedAt:new Date().toISOString(),exitCode:load.success?0:1};artifacts.push(artifact('load',size,loadRun,{total:5,assertions:{total:5,passed:load.success?5:0},thresholds:load.thresholds,measurements:load.measurements}));if(!load.success)failures.push(`load/${size}`);
+export function parseDeviationReview(markdown) {
+  const match = markdown.match(/<!-- accepted-deviations:(\{[^\n]+\}) -->/);
+  if (!match)
+    return {
+      source: "GAMEPLAY_SPEC.md",
+      valid: false,
+      none: false,
+      acceptedCount: 0,
+      failures: ["missing machine-readable declaration"],
+    };
+  try {
+    const value = JSON.parse(match[1]);
+    if (
+      value.none === true &&
+      Array.isArray(value.deviations) &&
+      value.deviations.length === 0
+    )
+      return {
+        source: "GAMEPLAY_SPEC.md",
+        valid: true,
+        none: true,
+        acceptedCount: 0,
+        failures: [],
+      };
+    const required = [
+        "id",
+        "rationale",
+        "affectedRule",
+        "decision",
+        "regressionCoverage",
+      ],
+      valid =
+        Array.isArray(value.deviations) &&
+        value.deviations.length > 0 &&
+        value.deviations.every((x) =>
+          required.every((k) => typeof x[k] === "string" && x[k].trim()),
+        );
+    return {
+      source: "GAMEPLAY_SPEC.md",
+      valid,
+      none: false,
+      acceptedCount: value.deviations?.length ?? 0,
+      failures: valid ? [] : ["malformed deviation"],
+    };
+  } catch {
+    return {
+      source: "GAMEPLAY_SPEC.md",
+      valid: false,
+      none: false,
+      acceptedCount: 0,
+      failures: ["invalid JSON declaration"],
+    };
   }
-  let verifiedCampaign;try{const matches=await loadArtifacts();verifiedCampaign=verifyArtifacts(matches,{minimumSamples:CAMPAIGN_CRITERIA.minimumSamplesPerLobby});for(const size of RELEASE_GATE.lobbySizes){const selected=matches.filter(x=>x.lobbySize===size),boundaries=verifiedCampaign.replayBoundaries[size],run={command:'node server/playtest-runner.js --verify',startedAt,finishedAt:new Date().toISOString(),exitCode:0};artifacts.push(artifact('replay',size,run,{total:boundaries.total,boundaries,fixedStepMs:BALANCE.match.step*1000,replaySeeds:selected.map(x=>x.seed)}));}}catch(error){failures.push(`campaign/replay: ${error.message}`);verifiedCampaign={verified:false,pass:false,balanceVersion:BALANCE.version,lobbyResults:{}};for(const size of RELEASE_GATE.lobbySizes){const now=new Date().toISOString(),run={command:'node server/playtest-runner.js --verify',startedAt:now,finishedAt:now,exitCode:1};artifacts.push(artifact('replay',size,run,{fixedStepMs:BALANCE.match.step*1000,boundaries:{total:0,verified:0,divergences:1}}));}}
-  const deviationReview=parseDeviationReview(await readFile(new URL('../GAMEPLAY_SPEC.md',import.meta.url),'utf8'));
-  const evidence={schemaVersion:RELEASE_EVIDENCE_VERSION,balanceVersion:BALANCE.version,startedAt,finishedAt:new Date().toISOString(),commands:artifacts.map(x=>x.command),artifacts,perLobby:Object.fromEntries(RELEASE_GATE.lobbySizes.map(size=>[size,artifacts.filter(x=>x.lobbySize===size).map(x=>({checkClass:x.checkClass,success:x.success}))])),acceptanceScenarios:MVP_ACCEPTANCE_SCENARIOS,verifiedCampaign,deviationReview,failures};
-  const result=evaluateReleaseGate(evidence);evidence.ready=result.ready;evidence.failures=[...new Set([...failures,...result.blockers])];await mkdir(new URL('.',RELEASE_ARTIFACT_URL),{recursive:true});await writeFile(RELEASE_ARTIFACT_URL,JSON.stringify(evidence,null,2)+'\n');return evidence;
 }
-if(import.meta.url===pathToFileURL(process.argv[1]).href)runReleaseGate().then(x=>{console.log(JSON.stringify({artifact:fileURLToPath(RELEASE_ARTIFACT_URL),ready:x.ready,failures:x.failures},null,2));if(!x.ready)process.exitCode=1;}).catch(e=>{console.error(e.stack);process.exitCode=1;});
+
+export async function runReleaseGate() {
+  const startedAt = new Date().toISOString(),
+    artifacts = [],
+    failures = [];
+  for (const size of RELEASE_GATE.lobbySizes) {
+    for (const checkClass of ["unit", "integration"]) {
+      const run = await command(
+        process.execPath,
+        ["--test", ...testFiles[checkClass]],
+        { LOBBY_SIZE: String(size) },
+      );
+      artifacts.push(artifact(checkClass, size, run, { total: 1 }));
+      if (run.exitCode)
+        failures.push(`${checkClass}/${size}: ${run.stderr || run.stdout}`);
+    }
+    const acceptanceRun = await command(
+        process.execPath,
+        [
+          "--test",
+          "--test-reporter=./server/acceptance-reporter.js",
+          "test/mvp-acceptance.test.js",
+        ],
+        { LOBBY_SIZE: String(size) },
+      ),
+      scenarioIds = parseAcceptanceResults(acceptanceRun.stdout);
+    artifacts.push(
+      artifact("acceptance", size, acceptanceRun, {
+        total: scenarioIds.length,
+        scenarioIds,
+      }),
+    );
+    if (acceptanceRun.exitCode) failures.push(`acceptance/${size}`);
+    const browserStart = new Date().toISOString();
+    try {
+      const report = await runBrowserChecks(size),
+        run = {
+          command: `LOBBY_SIZE=${size} node server/browser-runner.js`,
+          startedAt: browserStart,
+          finishedAt: new Date().toISOString(),
+          exitCode: report.success ? 0 : 1,
+        };
+      const browserAssertions = report.assertions.filter(
+        (x) =>
+          !x.id.includes("accessible") &&
+          ![
+            "keyboard-map-and-focus",
+            "live-announcements",
+            "non-colour-cues",
+            "automated-accessibility-rules",
+          ].includes(x.id),
+      );
+      const accessibilityAssertions = report.assertions.filter(
+        (x) => !browserAssertions.includes(x),
+      );
+      artifacts.push(
+        artifact("browser", size, run, {
+          total: browserAssertions.length,
+          assertions: {
+            total: browserAssertions.length,
+            passed: browserAssertions.filter((x) => x.pass).length,
+            results: browserAssertions,
+          },
+          renderedPage: report.renderedPage,
+          serverStateObserved: report.serverStateObserved,
+        }),
+      );
+      artifacts.push(
+        artifact("accessibility", size, run, {
+          total: accessibilityAssertions.length,
+          assertions: {
+            total: accessibilityAssertions.length,
+            passed: accessibilityAssertions.filter((x) => x.pass).length,
+            results: accessibilityAssertions,
+          },
+          viewport: report.viewport,
+          axe: true,
+        }),
+      );
+    } catch (error) {
+      failures.push(`browser/${size}: ${error.message}`);
+      const run = {
+        command: `LOBBY_SIZE=${size} node server/browser-runner.js`,
+        startedAt: browserStart,
+        finishedAt: new Date().toISOString(),
+        exitCode: 1,
+      };
+      artifacts.push(artifact("browser", size, run));
+      artifacts.push(artifact("accessibility", size, run));
+    }
+    const loadStart = new Date().toISOString(),
+      load = await runLoadCheck(size),
+      loadRun = {
+        command: `LOBBY_SIZE=${size} node server/load-runner.js`,
+        startedAt: loadStart,
+        finishedAt: new Date().toISOString(),
+        exitCode: load.success ? 0 : 1,
+      };
+    artifacts.push(
+      artifact("load", size, loadRun, {
+        total: 5,
+        assertions: { total: 5, passed: load.success ? 5 : 0 },
+        thresholds: load.thresholds,
+        measurements: load.measurements,
+      }),
+    );
+    if (!load.success) failures.push(`load/${size}`);
+  }
+  let verifiedCampaign;
+  try {
+    const matches = await loadArtifacts();
+    verifiedCampaign = verifyArtifacts(matches, {
+      minimumSamples: CAMPAIGN_CRITERIA.minimumSamplesPerLobby,
+    });
+    for (const size of RELEASE_GATE.lobbySizes) {
+      const selected = matches.filter((x) => x.lobbySize === size),
+        boundaries = verifiedCampaign.replayBoundaries[size],
+        run = {
+          command: "node server/playtest-runner.js --verify",
+          startedAt,
+          finishedAt: new Date().toISOString(),
+          exitCode: 0,
+        };
+      artifacts.push(
+        artifact("replay", size, run, {
+          total: boundaries.total,
+          boundaries,
+          fixedStepMs: BALANCE.match.step * 1000,
+          replaySeeds: selected.map((x) => x.seed),
+        }),
+      );
+    }
+  } catch (error) {
+    failures.push(`campaign/replay: ${error.message}`);
+    verifiedCampaign = {
+      verified: false,
+      pass: false,
+      balanceVersion: BALANCE.version,
+      lobbyResults: {},
+    };
+    for (const size of RELEASE_GATE.lobbySizes) {
+      const now = new Date().toISOString(),
+        run = {
+          command: "node server/playtest-runner.js --verify",
+          startedAt: now,
+          finishedAt: now,
+          exitCode: 1,
+        };
+      artifacts.push(
+        artifact("replay", size, run, {
+          fixedStepMs: BALANCE.match.step * 1000,
+          boundaries: { total: 0, verified: 0, divergences: 1 },
+        }),
+      );
+    }
+  }
+  const deviationReview = parseDeviationReview(
+    await readFile(new URL("../GAMEPLAY_SPEC.md", import.meta.url), "utf8"),
+  );
+  const evidence = {
+    schemaVersion: RELEASE_EVIDENCE_VERSION,
+    balanceVersion: BALANCE.version,
+    startedAt,
+    finishedAt: new Date().toISOString(),
+    commands: artifacts.map((x) => x.command),
+    artifacts,
+    perLobby: Object.fromEntries(
+      RELEASE_GATE.lobbySizes.map((size) => [
+        size,
+        artifacts
+          .filter((x) => x.lobbySize === size)
+          .map((x) => ({ checkClass: x.checkClass, success: x.success })),
+      ]),
+    ),
+    acceptanceScenarios: MVP_ACCEPTANCE_SCENARIOS,
+    verifiedCampaign,
+    deviationReview,
+    failures,
+  };
+  const result = evaluateReleaseGate(evidence);
+  evidence.ready = result.ready;
+  evidence.failures = [...new Set([...failures, ...result.blockers])];
+  await mkdir(new URL(".", RELEASE_ARTIFACT_URL), { recursive: true });
+  await writeFile(
+    RELEASE_ARTIFACT_URL,
+    JSON.stringify(evidence, null, 2) + "\n",
+  );
+  return evidence;
+}
+if (import.meta.url === pathToFileURL(process.argv[1]).href)
+  runReleaseGate()
+    .then((x) => {
+      console.log(
+        JSON.stringify(
+          {
+            artifact: fileURLToPath(RELEASE_ARTIFACT_URL),
+            ready: x.ready,
+            failures: x.failures,
+          },
+          null,
+          2,
+        ),
+      );
+      if (!x.ready) process.exitCode = 1;
+    })
+    .catch((e) => {
+      console.error(e.stack);
+      process.exitCode = 1;
+    });

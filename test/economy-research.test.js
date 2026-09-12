@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Game, TREATMENTS } from '../server/game.js';
-import { BUDGET_PRESETS, redistributeBudget } from '../public/budget.js';
+import { BUDGET_PRESETS, redistributeBudget } from '../client/budget.js';
 
 const makeGame = () => { let id=0; return new Game({random:()=>.2,id:()=>`economy-${++id}`}); };
 const advance = (game, seconds) => { for(let elapsed=0;elapsed<seconds;elapsed+=.25)game.tick(.25); };

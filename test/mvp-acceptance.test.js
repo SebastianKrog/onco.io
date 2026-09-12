@@ -14,7 +14,7 @@ test('acceptance manifest maps all section 14 scenarios to explicit tests and cl
     readFile(new URL('../GAMEPLAY_SPEC.md',import.meta.url),'utf8'),
     readFile(new URL('./mvp-acceptance.test.js',import.meta.url),'utf8'),
     readFile(new URL('../public/index.html',import.meta.url),'utf8'),
-    readFile(new URL('../public/client.js',import.meta.url),'utf8')
+    readFile(new URL('../client/client.js',import.meta.url),'utf8')
   ]);
   const section=spec.match(/## 14\. MVP acceptance scenarios\n([\s\S]*?)\n## 15\./)?.[1]??'';
   assert.deepEqual([...section.matchAll(/^(\d+)\./gm)].map(match=>Number(match[1])),MVP_ACCEPTANCE_SCENARIOS.map(scenario=>scenario.id));
