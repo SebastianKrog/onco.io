@@ -677,10 +677,11 @@ const formatTime = (value) =>
 function drawRegion(region) {
   const hex = geometry(region),
     owner = state.players.find((player) => player.id === region.ownerId),
+    mine = owner?.id === myId,
     contest = region.contestParties?.length > 1;
   traceHex(ctx, hex);
   ctx.fillStyle = owner ? owner.color : "#132c32";
-  ctx.globalAlpha = owner?.id === myId ? 0.78 : 0.48;
+  ctx.globalAlpha = mine ? 0.9 : 0.55;
   ctx.fill();
   ctx.globalAlpha = 1;
   if (owner) {
@@ -689,8 +690,7 @@ function drawRegion(region) {
     ctx.clip();
     ctx.strokeStyle = "#ffffff35";
     ctx.lineWidth = 1;
-    const spacing =
-      6 + (state.players.findIndex((p) => p.id === owner.id) % 4) * 2;
+    const spacing = 7 + (owner.ownershipPattern ?? 0) * 2;
     for (
       let x = hex.cx - hex.size * 2;
       x < hex.cx + hex.size * 2;
@@ -714,8 +714,17 @@ function drawRegion(region) {
         : availablePad
           ? "#46ddb0"
           : "#315159";
-  ctx.lineWidth = selectedRegion === region.id ? 4 : availablePad ? 3 : 1;
+  ctx.lineWidth =
+    selectedRegion === region.id ? 4 : mine ? 3 : availablePad ? 3 : 1;
   ctx.stroke();
+  // A double boundary and YOU marker make local ownership recognizable in
+  // monochrome and for players who cannot distinguish the company colours.
+  if (mine) {
+    traceHex(ctx, { ...hex, size: Math.max(1, hex.size - 4) });
+    ctx.strokeStyle = "#f5fffc";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
   ctx.fillStyle = {
     solid: "#ff7878",
     blood: "#a98bff",
@@ -732,12 +741,17 @@ function drawRegion(region) {
   ctx.fillStyle = "#dcebea";
   ctx.font = `700 ${Math.max(8, Math.min(13, hex.size * 0.22))}px system-ui`;
   ctx.fillText(owner?.initials ?? "—", hex.cx, hex.cy);
+  if (mine) {
+    ctx.font = `800 ${Math.max(7, Math.min(9, hex.size * 0.15))}px system-ui`;
+    ctx.fillStyle = "#fff";
+    ctx.fillText("YOU", hex.cx, hex.cy + hex.size * 0.2);
+  }
   ctx.font = `${Math.max(7, Math.min(10, hex.size * 0.17))}px system-ui`;
   ctx.fillStyle = "#b7cccc";
   ctx.fillText(
     `L${region.level} · ${Math.floor(region.protection)}`,
     hex.cx,
-    hex.cy + hex.size * 0.34,
+    hex.cy + hex.size * 0.42,
   );
   if (contest) {
     ctx.strokeStyle = "#ef647d";

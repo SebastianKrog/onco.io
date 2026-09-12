@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { Game } from '../server/game.js';
+import { COMPANY_COLORS, Game, companyColor } from '../server/game.js';
 import { AlertEventKeys, operationalAlerts } from '../client/alert-events.js';
 
 const publicSource = name => readFile(new URL(`../public/${name}`, import.meta.url), 'utf8');
@@ -32,6 +32,12 @@ test('snapshot provides complete operational metrics and selected-region intelli
   assert.equal(region.storageUsed,120);assert.equal(region.storageCapacity,300);assert.equal(region.overCapacity,false);assert.equal(region.productionEligible,true);assert.equal(region.contestParties[0].role,'incumbent');assert.equal(region.productionFocused,true);assert.equal(region.developmentFocused,true);
 });
 
+test('company appearances are stable, distinct, and include a non-colour ownership pattern',()=>{
+  const game=makeGame(),players=Array.from({length:20},(_,index)=>game.addPlayer(`Company ${index}`));
+  assert.deepEqual(players.slice(0,8).map(player=>player.color),COMPANY_COLORS);assert.equal(new Set(players.map(player=>player.color)).size,players.length);assert.equal(players[12].color,companyColor(12));
+  assert.deepEqual(players.slice(0,8).map(player=>player.ownershipPattern),[0,1,2,3,0,1,2,3]);const snapshot=game.snapshot();assert.deepEqual(snapshot.players.map(player=>player.color),players.map(player=>player.color));
+});
+
 test('pending continuity programmes do not block eligible manufacturing or snapshot feedback',()=>{
   const game=makeGame(),player=game.addPlayer('Continuity Manufacturer');game.start(player,0);const region=game.regions[0];
   player.completed.push('R09');player.allocation={research:0,manufacturing:100,infrastructure:0};region.inventories.medicine=0;region.inventories.vaccine=game.balance.programme.vaccineUnits;
@@ -58,5 +64,5 @@ test('client includes the complete controls, feedback, keyboard access, and non-
   const [html,client,alerts,css]=await Promise.all([publicSource('index.html'),clientSource('client.js'),clientSource('alert-events.js'),publicSource('style.css')]);
   assert.match(html,/id="specialty"/);assert.match(html,/id="surrender"/);assert.match(html,/tabindex="0"/);assert.match(html,/aria-label="Hospital network map/);assert.match(html,/Operational alerts/);
   for(const command of ["type:'pin'","type:'programme'","type:'withdraw'","type:'research'","type:'surrender'"])assert.match(client,new RegExp(command.replace(':', ':\\s*').replace("'", "['\"]").replace(/'$/, "['\"]")));
-  assert.match(client,/ArrowLeft/);assert.match(alerts,/New supply contest/);assert.match(alerts,/Production is blocked/);assert.match(alerts,/Dominance hold started/);assert.match(client,/contestParties/);assert.match(client,/◆/);assert.match(client,/initials/);assert.match(css,/canvas:focus/);
+  assert.match(client,/ArrowLeft/);assert.match(alerts,/New supply contest/);assert.match(alerts,/Production is blocked/);assert.match(alerts,/Dominance hold started/);assert.match(client,/contestParties/);assert.match(client,/◆/);assert.match(client,/initials/);assert.match(css,/canvas:focus/);assert.match(client,/ownershipPattern/);assert.match(client,/fillText\("YOU"/);assert.match(client,/mine \? 3/);
 });
