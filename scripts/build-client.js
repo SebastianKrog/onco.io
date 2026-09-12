@@ -5,6 +5,7 @@ const entryPoints = [
   "client/budget.js",
   "client/client.js",
   "client/hex.js",
+  "client/state-sync.js",
 ];
 
 await build({
