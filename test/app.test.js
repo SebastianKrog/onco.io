@@ -54,8 +54,12 @@ test('connects players, accepts messages, broadcasts state, and enables automati
   await new Promise(resolve=>setTimeout(resolve,10)); app.game.tick(0.25);
   const statePromise=event('message'); app.broadcast();
   const stateEvent = await statePromise;
-  const state = JSON.parse(stateEvent.data);
-  assert.equal(state.type, 'state'); assert.equal(state.players[0].name, 'Lab Team');
+  const publication = JSON.parse(stateEvent.data);
+  assert.equal(publication.type, 'state');
+  assert.equal(publication.baseVersion, 0);
+  assert.ok(publication.matchId);
+  const state = publication.state;
+  assert.equal(state.players[0].name, 'Lab Team');
   assert.equal(state.regions[pad].ownerId, 'identity-1');
   assert.deepEqual(state.players[0].allocation, { research: 40, manufacturing: 40, infrastructure: 20 });
   socket.close(); await event('close');

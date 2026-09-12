@@ -24,6 +24,7 @@
     "test:load": "node server/load-runner.js",
     "release:gate": "node server/release-runner.js",
     "build": "node scripts/build-client.js",
+    "benchmark:deltas": "node scripts/benchmark-deltas.js",
     "format:client": "prettier --write 'client/*.js' 'scripts/*.js'",
     "format:server": "prettier --write 'server/*.js'",
     "format": "prettier --write 'client/*.js' 'server/*.js' 'scripts/*.js'"

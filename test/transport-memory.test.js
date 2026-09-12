@@ -4,6 +4,7 @@ import { Writable } from 'node:stream';
 import { setImmediate as immediate } from 'node:timers/promises';
 import { createApp } from '../server/app.js';
 import { Game } from '../server/game.js';
+import { applyDelta, createDelta } from '../client/state-sync.js';
 
 function decodeFrame(buffer) {
   const size = buffer[1] & 127;
@@ -67,7 +68,55 @@ test('a stalled client retains one frame while healthy clients receive fresh sta
   version = 99;
   app.broadcast();
   assert.equal(slowFrames.length, 2);
-  assert.equal(decodeFrame(slowFrames[1]).version, 99);
+  const resumed = decodeFrame(slowFrames[1]);
+  assert.equal(resumed.type, 'state');
+  assert.equal(resumed.state.version, 99);
+  assert.equal(resumed.baseVersion, 0);
+});
+
+test('deltas reproduce snapshots exactly without mutating the alert baseline', () => {
+  const previous = { map: { columns: 2 }, regions: [
+    { id: 0, geometry: { x: 1 }, owner: 1, obsolete: true },
+    { id: 1, geometry: { x: 2 }, owner: null },
+  ], queue: [1], removed: 'yes' };
+  const current = { map: { columns: 2 }, regions: [
+    { id: 0, geometry: { x: 1 }, owner: 2 },
+    { id: 1, geometry: { x: 2 }, owner: null },
+  ], queue: [1, 2] };
+  const frozen = structuredClone(previous);
+  const delta = createDelta(previous, current);
+  assert.deepEqual(applyDelta(previous, delta), current);
+  assert.deepEqual(previous, frozen);
+  assert.ok(delta.deletions.some(path => path.join('.') === 'removed'));
+  assert.ok(delta.deletions.some(path => path.join('.') === 'regions.0.obsolete'));
+  assert.ok(!JSON.stringify(delta).includes('geometry'));
+});
+
+test('healthy clients receive sequential deltas while new clients get snapshots', () => {
+  let value = 1;
+  const app = createApp({ tickRate: 1000000, game: {
+    tick() {}, snapshot() { return { stable: { rules: true }, value }; },
+  } });
+  const frames = [];
+  const receiver = new Writable({ write(chunk, encoding, callback) { frames.push(decodeFrame(chunk)); callback(); } });
+  app.sockets.add(receiver);
+  app.broadcast();
+  value = 2;
+  app.broadcast();
+  assert.equal(frames[0].type, 'state');
+  assert.equal(frames[1].type, 'delta');
+  assert.equal(frames[1].baseVersion, frames[0].version);
+  assert.deepEqual(applyDelta(frames[0].state, frames[1]), { stable: { rules: true }, value: 2 });
+  assert.ok(!JSON.stringify(frames[1]).includes('rules'));
+  receiver.destroy(); app.server.close();
+});
+
+test('match mismatches and skipped versions are not valid delta bases', () => {
+  const base = { matchId: 'a', version: 3 };
+  const accept = (message) => message.matchId === base.matchId && message.baseVersion === base.version;
+  assert.equal(accept({ matchId: 'a', baseVersion: 3 }), true);
+  assert.equal(accept({ matchId: 'a', baseVersion: 2 }), false);
+  assert.equal(accept({ matchId: 'b', baseVersion: 3 }), false);
 });
 
 test('no snapshots are built when there are no writable recipients', t => {

@@ -1,6 +1,7 @@
 import { hexGeometry, pointInHex, traceHex } from "./hex.js";
 import { BUDGET_PRESETS } from "./budget.js";
 import { AlertEventKeys, operationalAlerts } from "./alert-events.js";
+import { applyDelta } from "./state-sync.js";
 const canvas = document.querySelector("#map"),
   ctx = canvas.getContext("2d");
 const reconnectCredential = localStorage.getItem("onco-reconnect");
@@ -19,6 +20,8 @@ let state = null,
   spectator = false,
   lastOutcomeSequence = 0,
   seenEventIds = new Set();
+let stateMatchId = null,
+  stateVersion = 0;
 const send = (message) =>
   socket.readyState === WebSocket.OPEN &&
   socket.send(
@@ -50,10 +53,25 @@ socket.addEventListener("message", ({ data }) => {
       `Command rejected: ${message.reason}`,
       `rejection:${message.commandId ?? message.reason}`,
     );
-  if (message.type === "state") {
+  if (message.type === "state" || message.type === "delta") {
+    let nextState;
+    if (message.type === "state") {
+      nextState = message.state;
+    } else if (
+      !state ||
+      message.matchId !== stateMatchId ||
+      message.baseVersion !== stateVersion
+    ) {
+      send({ type: "sync" });
+      return;
+    } else {
+      nextState = applyDelta(state, message);
+    }
     previousState = state;
-    state = message;
-    const outcome = message.commandOutcomes
+    state = nextState;
+    stateMatchId = message.matchId;
+    stateVersion = message.version;
+    const outcome = state.commandOutcomes
       ?.filter(
         (item) =>
           item.companyId === myId && item.sequence > lastOutcomeSequence,
@@ -68,8 +86,8 @@ socket.addEventListener("message", ({ data }) => {
         );
     }
     for (const event of [
-      ...(message.routeInterruptions || []),
-      ...(message.arrivalReports || []),
+      ...(state.routeInterruptions || []),
+      ...(state.arrivalReports || []),
     ])
       if (event.companyId === myId && !seenEventIds.has(event.id)) {
         seenEventIds.add(event.id);
