@@ -305,6 +305,7 @@ function render() {
       : `${String(Math.floor(state.remaining / 60)).padStart(2, "0")}:${String(Math.floor(state.remaining % 60)).padStart(2, "0")}`;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   for (const region of state.regions) drawRegion(region);
+  drawTerritoryBoundaries();
   drawConvoys();
   if (!me) {
     document.querySelector("#instruction").textContent =
@@ -694,7 +695,9 @@ function drawRegion(region) {
     ctx.clip();
     ctx.strokeStyle = "#ffffff35";
     ctx.lineWidth = 1;
-    const spacing = 7 + (owner.ownershipPattern ?? 0) * 2;
+    // Retain a sparse non-colour ownership texture without letting hatching
+    // compete with supply, profile, and defence labels.
+    const spacing = 20 + (owner.ownershipPattern ?? 0) * 5;
     for (
       let x = hex.cx - hex.size * 2;
       x < hex.cx + hex.size * 2;
@@ -717,7 +720,7 @@ function drawRegion(region) {
         ? "#ffc857"
         : availablePad
           ? "#46ddb0"
-          : "#315159";
+          : "#203b41";
   ctx.lineWidth =
     selectedRegion === region.id ? 4 : mine ? 3 : availablePad ? 3 : 1;
   ctx.stroke();
@@ -769,4 +772,25 @@ function drawRegion(region) {
       offset += part;
     }
   }
+}
+
+function drawTerritoryBoundaries() {
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  for (const region of state.regions) {
+    if (!region.territoryBoundaryEdges?.length) continue;
+    const hex = geometry(region);
+    ctx.beginPath();
+    for (const edge of region.territoryBoundaryEdges) {
+      const start = hex.points[edge],
+        end = hex.points[(edge + 1) % hex.points.length];
+      ctx.moveTo(start.x, start.y);
+      ctx.lineTo(end.x, end.y);
+    }
+    ctx.strokeStyle = region.ownerId === myId ? "#f5fffc" : "#789da0";
+    ctx.lineWidth = region.ownerId === myId ? 4 : 2.5;
+    ctx.stroke();
+  }
+  ctx.restore();
 }

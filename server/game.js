@@ -1,5 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
-import { createSeededMap, MAP_TEMPLATES, regionNeighbours } from "./map.js";
+import {
+  createSeededMap,
+  MAP_TEMPLATES,
+  regionNeighbours,
+  territoryBoundaryEdges,
+} from "./map.js";
 import { BUDGET_PRESETS, redistributeBudget } from "../client/budget.js";
 import { BALANCE, getBalance } from "./balance.js";
 import { buildPlaytestReport } from "./playtest.js";
@@ -2140,6 +2145,7 @@ export class Game {
       }
       return {
         ...r,
+        territoryBoundaryEdges: territoryBoundaryEdges(r, this.regions),
         storageUsed,
         storageCapacity,
         // Keep the map's primary supply readout authoritative and independent

@@ -59,6 +59,44 @@ export function regionNeighbours(id, columns, rows) {
     .sort((a, b) => a - b);
 }
 
+// Canvas hex points run clockwise from the top vertex. These offsets therefore
+// map each neighbouring cell to the edge shared with it (top-right through
+// top-left). Keeping this classification server-side gives every client the
+// same connected-territory outline, including at the edge of the map.
+export function territoryBoundaryEdges(region, regions) {
+  if (region.ownerId == null) return [];
+  const offsets =
+    region.row % 2
+      ? [
+          [1, -1],
+          [1, 0],
+          [1, 1],
+          [0, 1],
+          [-1, 0],
+          [0, -1],
+        ]
+      : [
+          [0, -1],
+          [1, 0],
+          [0, 1],
+          [-1, 1],
+          [-1, 0],
+          [-1, -1],
+        ];
+  const byPosition = new Map(
+    regions.map((candidate) => [
+      `${candidate.column},${candidate.row}`,
+      candidate,
+    ]),
+  );
+  return offsets.flatMap(([dc, dr], edge) => {
+    const neighbour = byPosition.get(
+      `${region.column + dc},${region.row + dr}`,
+    );
+    return neighbour?.ownerId === region.ownerId ? [] : [edge];
+  });
+}
+
 function shuffled(values, random) {
   const result = [...values];
   for (let index = result.length - 1; index > 0; index -= 1) {
