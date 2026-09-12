@@ -64,7 +64,7 @@
       "checkClass": "acceptance",
       "lobbySize": 20,
       "balanceVersion": "0.2",
-      "command": "/root/.nvm/versions/node/v24.15.0/bin/node --test test/mvp-acceptance.test.js",
+      "command": "/root/.nvm/versions/node/v24.15.0/bin/node --test --test-reporter=./server/acceptance-reporter.js test/mvp-acceptance.test.js",
       "startedAt": "2026-09-11T19:53:10.550Z",
       "finishedAt": "2026-09-11T19:53:11.127Z",
       "exitCode": 0,
@@ -270,7 +270,7 @@
       "checkClass": "acceptance",
       "lobbySize": 30,
       "balanceVersion": "0.2",
-      "command": "/root/.nvm/versions/node/v24.15.0/bin/node --test test/mvp-acceptance.test.js",
+      "command": "/root/.nvm/versions/node/v24.15.0/bin/node --test --test-reporter=./server/acceptance-reporter.js test/mvp-acceptance.test.js",
       "startedAt": "2026-09-11T19:53:32.034Z",
       "finishedAt": "2026-09-11T19:53:32.818Z",
       "exitCode": 0,
@@ -476,7 +476,7 @@
       "checkClass": "acceptance",
       "lobbySize": 40,
       "balanceVersion": "0.2",
-      "command": "/root/.nvm/versions/node/v24.15.0/bin/node --test test/mvp-acceptance.test.js",
+      "command": "/root/.nvm/versions/node/v24.15.0/bin/node --test --test-reporter=./server/acceptance-reporter.js test/mvp-acceptance.test.js",
       "startedAt": "2026-09-11T19:53:58.203Z",
       "finishedAt": "2026-09-11T19:53:58.854Z",
       "exitCode": 0,
@@ -819,113 +819,91 @@
   "acceptanceScenarios": [
     {
       "id": 1,
-      "title": "Opening income and R02 timing",
-      "automated": true
+      "title": "Opening income and R02 timing"
     },
     {
       "id": 2,
-      "title": "Factory processing limits",
-      "automated": true
+      "title": "Factory processing limits"
     },
     {
       "id": 3,
-      "title": "Economy conservation",
-      "automated": true
+      "title": "Economy conservation"
     },
     {
       "id": 4,
-      "title": "Research graph and schedule",
-      "automated": true
+      "title": "Research graph and schedule"
     },
     {
       "id": 5,
-      "title": "Packet percentages and minimums",
-      "automated": true
+      "title": "Packet percentages and minimums"
     },
     {
       "id": 6,
-      "title": "All-supply dispatch behavior",
-      "automated": true
+      "title": "All-supply dispatch behavior"
     },
     {
       "id": 7,
-      "title": "Three-edge R11 routing",
-      "automated": true
+      "title": "Three-edge R11 routing"
     },
     {
       "id": 8,
-      "title": "Broken route and source loss",
-      "automated": true
+      "title": "Broken route and source loss"
     },
     {
       "id": 9,
-      "title": "Pressure conservation",
-      "automated": true
+      "title": "Pressure conservation"
     },
     {
       "id": 10,
-      "title": "Contest examples and mutual exhaustion",
-      "automated": true
+      "title": "Contest examples and mutual exhaustion"
     },
     {
       "id": 11,
-      "title": "Persistent multi-attacker disputes",
-      "automated": true
+      "title": "Persistent multi-attacker disputes"
     },
     {
       "id": 12,
-      "title": "Capture downgrade and excess stock",
-      "automated": true
+      "title": "Capture downgrade and excess stock"
     },
     {
       "id": 13,
-      "title": "Capture income and dominance timing",
-      "automated": true
+      "title": "Capture income and dominance timing"
     },
     {
       "id": 14,
-      "title": "Arrival and regeneration timing",
-      "automated": true
+      "title": "Arrival and regeneration timing"
     },
     {
       "id": 15,
-      "title": "Continuity programme lifecycle",
-      "automated": true
+      "title": "Continuity programme lifecycle"
     },
     {
       "id": 16,
-      "title": "Order-independent arrival aggregation",
-      "automated": true
+      "title": "Order-independent arrival aggregation"
     },
     {
       "id": 17,
-      "title": "Withdrawal conservation",
-      "automated": true
+      "title": "Withdrawal conservation"
     },
     {
       "id": 18,
-      "title": "Commitment grandfathering",
-      "automated": true
+      "title": "Commitment grandfathering"
     },
     {
       "id": 19,
-      "title": "Bot reserve and programme recovery",
-      "automated": true
+      "title": "Bot reserve and programme recovery"
     },
     {
       "id": 20,
-      "title": "Surrender and reconnect control",
-      "automated": true
+      "title": "Surrender and reconnect control"
     },
     {
       "id": 21,
-      "title": "Simultaneous loss and capture",
-      "automated": true
+      "title": "Simultaneous loss and capture"
     },
     {
       "id": 22,
-      "title": "Command rejection atomicity",
-      "automated": true
+      "title": "Command rejection atomicity"
     }
   ],
   "verifiedCampaign": {

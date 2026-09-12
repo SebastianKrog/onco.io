@@ -29,9 +29,11 @@ export const MVP_ACCEPTANCE_SCENARIOS = deepFreeze([
   'Surrender and reconnect control',
   'Simultaneous loss and capture',
   'Command rejection atomicity'
-].map((title, index) => ({ id: index + 1, title, automated: true })));
+].map((title, index) => ({ id: index + 1, title })));
 
-export function acceptanceCoverage() {
-  const automated = MVP_ACCEPTANCE_SCENARIOS.filter(scenario => scenario.automated).length;
-  return { total: MVP_ACCEPTANCE_SCENARIOS.length, automated, complete: automated === MVP_ACCEPTANCE_SCENARIOS.length, scenarios: MVP_ACCEPTANCE_SCENARIOS };
+export function acceptanceCoverage(scenarioIds = []) {
+  const covered = new Set(scenarioIds);
+  const scenarios = MVP_ACCEPTANCE_SCENARIOS.map(scenario => ({...scenario, automated: covered.has(scenario.id)}));
+  const automated = scenarios.filter(scenario => scenario.automated).length;
+  return { total: scenarios.length, automated, complete: automated === scenarios.length, scenarios };
 }
