@@ -1,13 +1,15 @@
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { createServer } from "node:http";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Game } from "./game.js";
+import { createDelta } from "../client/state-sync.js";
 
 const publicDir = fileURLToPath(new URL("../public/", import.meta.url));
 const MAX_SOCKET_BUFFER_BYTES = 1024 * 1024;
+const DELTA_HISTORY_LIMIT = 32;
 const mime = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -44,6 +46,11 @@ export function createApp({
     }
   });
   const sockets = new Set();
+  const clientState = new WeakMap();
+  const matchId = randomUUID();
+  let version = 0;
+  let baseline = null;
+  const history = [];
   const companySockets = new Map();
   const frame = (message) => {
     const payload = Buffer.from(message);
@@ -85,6 +92,7 @@ export function createApp({
       `HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`,
     );
     sockets.add(socket);
+    clientState.set(socket, { matchId, version: 0, needsFull: true });
     const credential = new URL(
       request.url,
       "http://localhost",
@@ -141,6 +149,10 @@ export function createApp({
         if (opcode === 1) {
           try {
             const message = JSON.parse(body.toString());
+            if (message.type === "sync") {
+              clientState.set(socket, { matchId, version: 0, needsFull: true });
+              continue;
+            }
             if (!player || !game.handle(player.id, message))
               send(
                 socket,
@@ -169,8 +181,17 @@ export function createApp({
     });
   });
   const broadcast = () => {
-    // Snapshots replace older state. Skip a backed-up connection instead of
-    // retaining a queue of obsolete snapshots; resume with the latest state.
+    // Never queue dependent deltas. A skipped publication invalidates that
+    // client's base and its next writable publication is a full snapshot.
+    for (const socket of sockets)
+      if (
+        !socket.destroyed &&
+        !socket.writableEnded &&
+        (socket.writableNeedDrain || socket.writableLength !== 0)
+      ) {
+        const status = clientState.get(socket);
+        if (status) status.needsFull = true;
+      }
     const ready = [...sockets].filter(
       (socket) =>
         !socket.destroyed &&
@@ -179,14 +200,49 @@ export function createApp({
         socket.writableLength === 0,
     );
     if (!ready.length) return;
-    const payload = frame(
+    const current = structuredClone(
+      game.snapshot({ includeTelemetryEvents: false }),
+    );
+    const nextVersion = version + 1;
+    const delta = baseline ? createDelta(baseline, current) : null;
+    const deltaPayload = delta
+      ? frame(
+          JSON.stringify({
+            type: "delta",
+            matchId,
+            baseVersion: version,
+            version: nextVersion,
+            ...delta,
+          }),
+        )
+      : null;
+    const fullPayload = frame(
       JSON.stringify({
         type: "state",
-        ...game.snapshot({ includeTelemetryEvents: false }),
+        matchId,
+        baseVersion: 0,
+        version: nextVersion,
+        state: current,
       }),
     );
-    // Share one encoded buffer across clients instead of allocating per client.
-    for (const client of ready) writeFrame(client, payload);
+    for (const client of ready) {
+      const status = clientState.get(client) ?? { needsFull: true };
+      const canDelta =
+        deltaPayload &&
+        !status.needsFull &&
+        status.matchId === matchId &&
+        status.version === version;
+      writeFrame(client, canDelta ? deltaPayload : fullPayload);
+      clientState.set(client, {
+        matchId,
+        version: nextVersion,
+        needsFull: false,
+      });
+    }
+    baseline = deepFreeze(current);
+    version = nextVersion;
+    history.push(delta);
+    if (history.length > DELTA_HISTORY_LIMIT) history.shift();
   };
   let broadcastElapsed = 0;
   const timer = setInterval(() => {
@@ -202,5 +258,13 @@ export function createApp({
     clearInterval(timer);
     for (const socket of sockets) socket.destroy();
   });
-  return { server, game, sockets, broadcast };
+  return { server, game, sockets, broadcast, clientState, history, matchId };
+}
+
+function deepFreeze(value) {
+  if (value && typeof value === "object" && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const child of Object.values(value)) deepFreeze(child);
+  }
+  return value;
 }
