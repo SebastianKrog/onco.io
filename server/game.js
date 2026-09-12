@@ -115,7 +115,7 @@ export class Game {
   recordTelemetry(type,player,data={}){const actor=!player?'simulation':player.bot?(player.surrendered?'surrender-policy':'bot-policy-'+(player.botSlot%3)):'human';const event={type,at:this.elapsed,companyId:player?.id??null,actor,...data};this.telemetry.events.push(event);if(this.telemetry.events.length>5000)this.telemetry.events.shift();return event;}
   companyTelemetry(p){return this.telemetry.companies[p.id]??=( {regionSeconds:0,research:0,completedResearch:0,treatmentOutput:Object.fromEntries(KEYS.map(k=>[k,0])),factoryCreditSeconds:0,redirectedFunding:0,unusedFunding:0,dispatches:0,programmes:0,eliminatedAt:null} );}
   replayBoundary(){const state={phase:this.phase,result:this.result,players:[...this.players.values()].map(p=>({id:p.id,regions:this.owned(p).map(r=>r.id),research:p.research,completed:p.completed,allocation:p.allocation,selectedTreatment:p.selectedTreatment,regionSeconds:p.regionSeconds,eliminated:p.eliminated})),regions:this.regions.map(r=>({ownerId:r.ownerId,level:r.level,upgradeProgress:r.upgradeProgress,protection:r.protection,inventories:r.inventories,campaigns:r.campaigns,programme:r.programme})),convoys:this.convoys.map(c=>({companyId:c.companyId,sourceId:c.sourceId,targetId:c.targetId,path:c.path,index:c.index,supply:c.supply,dueAt:c.dueAt}))};return {at:this.elapsed,digest:createHash('sha256').update(JSON.stringify(state)).digest('hex')};}
-  exportReplay(){return {format:1,step:STEP,seed:this.seed,balanceVersion:this.balance.version,lobbySize:this.lobbySize,matchSeconds:this.matchSeconds,placementSeconds:this.placementSeconds,columns:this.map.columns,rows:this.map.rows,companies:[...this.players.values()].map(p=>({id:p.id,name:p.name,bot:p.bot&&!p.surrendered,botSlot:p.botSlot,initialRegionId:p.initialRegionId,specialty:p.specialty})),commands:this.commandLog.filter(x=>x.status==='applied').map(x=>({companyId:x.companyId,processedAt:x.processedAt,message:x.message})),boundaries:this.boundarySnapshots,result:this.result};}
+  exportReplay(){return {format:1,step:STEP,seed:this.seed,balanceVersion:this.balance.version,lobbySize:this.lobbySize,matchSeconds:this.matchSeconds,placementSeconds:this.placementSeconds,columns:this.map.columns,rows:this.map.rows,companies:[...this.players.values()].map(p=>({id:p.id,name:p.name,bot:p.bot&&!p.surrendered,botSlot:p.botSlot,initialRegionId:p.initialRegionId,specialty:p.specialty})),commands:this.commandLog.filter(x=>x.status==='applied').map(x=>({companyId:x.companyId,processedAt:x.processedAt,message:x.message})),boundaries:this.boundarySnapshots.map(boundary=>({...boundary})),result:this.result};}
   tick(seconds=STEP){if(this.phase===PHASES.FINISHED)return;this.accumulator+=clamp(Number(seconds)||0,0,5);while(this.accumulator+1e-9>=STEP&&this.phase!==PHASES.FINISHED){this.step();this.accumulator-=STEP;}}
   processCommands(){const queued=this.commands.splice(0).sort((a,b)=>a.sequence-b.sequence);for(const envelope of queued){const p=this.players.get(envelope.companyId),m=envelope.message;let ok=false;if(!p) this.lastRejection='unknown_company';else if(m.type==='start')ok=this.phase===PHASES.PLACEMENT&&this.start(p,m.regionId,m.specialty,true);else if(this.phase!==PHASES.ACTIVE)this.lastRejection='invalid_phase';else if(p.eliminated||p.bot)this.lastRejection='not_human_controlled';else {const actions={allocate:()=>this.allocate(p,m.allocation),budget:()=>this.changeBudget(p,m.category,m.value),budgetPreset:()=>this.applyBudgetPreset(p,m.preset),selectTreatment:()=>this.selectTreatment(p,m.treatment),dispatchPreferences:()=>this.setDispatchPreferences(p,m.commitment,m.filter),contest:()=>this.dispatch(p,m.fromId,m.toId,m.commitment,m.filter),dispatch:()=>this.dispatch(p,m.fromId,m.toId,m.commitment,m.filter),withdraw:()=>this.withdraw(p,m.regionId,m.toId),research:()=>this.prioritizeResearch(p,m.project,m.indication),programme:()=>this.activateProgramme(p,m.regionId),pin:()=>this.setPin(p,m.kind,m.regionId),surrender:()=>{p.surrendered=true;p.bot=true;return true;}};ok=actions[m.type]?.()??this.reject('unknown_command');}envelope.status=ok?'applied':'rejected';envelope.processedAt=this.phase===PHASES.ACTIVE?this.elapsed:this.lobbyElapsed;envelope.reason=ok?null:this.lastRejection;if(ok)this.recordTelemetry('decision',p,{command:m.type,commandId:m.commandId});}}
   beginMatch(){const vacant=this.lobbySize-this.players.size;for(let i=0;i<vacant;i++)this.addPlayer(`Automated ${String(i+1).padStart(2,'0')}`,{bot:true});const freePads=this.pads.filter(id=>this.regions[id].ownerId===null);const unplaced=[...this.players.values()].filter(p=>!p.started).sort((a,b)=>a.id.localeCompare(b.id));unplaced.forEach((p,index)=>this.start(p,freePads[index]));this.phase=PHASES.ACTIVE;this.elapsed=0;this.startedAt=this.now();}
@@ -170,6 +170,7 @@ export class Game {
 /** Re-simulate an exported active match and compare every fixed-step boundary. */
 export function replayMatch(record) {
   if (!record || record.format !== 1) throw new TypeError('Invalid replay record');
+  if(!Array.isArray(record.boundaries)||!Array.isArray(record.commands)||!Array.isArray(record.companies))throw new TypeError('Invalid replay record');
   if(record.step!=null&&record.step!==STEP)throw new TypeError('Unsupported replay step');
   getBalance(record.balanceVersion);
   const ids=[];for(const company of record.companies)ids.push(company.id,`replay-credential-${company.id}`);let generated=0;
@@ -177,13 +178,15 @@ export function replayMatch(record) {
   for(const company of record.companies){const player=game.addPlayer(company.name,{bot:company.bot});player.botSlot=company.botSlot;if(company.initialRegionId!=null)game.start(player,company.initialRegionId,company.specialty);}
   if(game.phase!==PHASES.ACTIVE){game.phase=PHASES.ACTIVE;game.elapsed=0;}
   const commands=[...record.commands].sort((a,b)=>a.processedAt-b.processedAt),differences=[];
-  for(let index=0;index<record.boundaries.length;index++){
+  const finalAt=record.result?.at??record.boundaries.at(-1)?.at??0,expectedCount=Math.round(finalAt/STEP);
+  for(let index=0;index<expectedCount;index++){
     while(commands[0]&&commands[0].processedAt<=game.elapsed+1e-9){const item=commands.shift();game.handle(item.companyId,{...item.message});}
-    const expected=record.boundaries[index],previous=record.boundaries[index-1];
-    if(!expected||!Number.isFinite(expected.at)||(previous&&Math.abs(expected.at-previous.at-STEP)>1e-9)){differences.push({index,at:expected?.at});break;}
+    const expected=record.boundaries[index],at=(index+1)*STEP;
+    if(!expected||!Number.isFinite(expected.at)||Math.abs(expected.at-at)>1e-9){differences.push({index,at});break;}
     game.tick(STEP);const actual=game.boundarySnapshots[index];
-    if(JSON.stringify(actual)!==JSON.stringify(expected)){differences.push({index,at:expected.at});break;}
+    if(JSON.stringify(actual)!==JSON.stringify(expected)){differences.push({index,at});break;}
   }
-  if(!differences.length&&record.result&&record.boundaries.at(-1)?.at!==record.result.at)differences.push({index:record.boundaries.length,at:record.result.at});
-  return {ok:differences.length===0,differences,game,actualResult:game.result,expectedResult:record.result};
+  if(!differences.length&&record.boundaries.length!==expectedCount)differences.push({index:expectedCount,at:(expectedCount+1)*STEP});
+  if(!differences.length&&JSON.stringify(game.result)!==JSON.stringify(record.result))differences.push({index:expectedCount,at:finalAt});
+  return {ok:differences.length===0,differences,verifiedBoundaries:differences.length?differences[0].index:expectedCount,expectedBoundaries:expectedCount,game,actualResult:game.result,expectedResult:record.result};
 }

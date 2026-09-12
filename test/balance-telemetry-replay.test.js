@@ -39,6 +39,13 @@ test('replay reports an intermediate divergence at its 250 ms boundary',()=>{
   const result=replayMatch(record);assert.equal(result.ok,false);assert.deepEqual(result.differences,[{index:9,at:2.5}]);
 });
 
+test('replay reports a missing fixed-step boundary at its expected 250 ms timestamp',()=>{
+  const game=makeGame(),a=game.addPlayer('Alpha'),b=game.addPlayer('Beta');game.start(a,0);game.start(b,3);
+  for(let i=0;i<20;i++)game.tick(.25);
+  const record=structuredClone(game.exportReplay());record.boundaries.splice(1,1);
+  const result=replayMatch(record);assert.equal(result.ok,false);assert.deepEqual(result.differences,[{index:1,at:.5}]);
+});
+
 test('client displays versioned match record and aggregate telemetry',async()=>{
   const [html,client]=await Promise.all([readFile(new URL('../public/index.html',import.meta.url),'utf8'),readFile(new URL('../public/client.js',import.meta.url),'utf8')]);
   assert.match(html,/id="match-record"/);assert.match(client,/state\.balance\?\.version/);assert.match(client,/contest-seconds/);

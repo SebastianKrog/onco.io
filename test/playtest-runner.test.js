@@ -22,3 +22,8 @@ test('verification rejects replay divergence, mixed versions, incomplete and mal
   const incomplete=structuredClone(artifacts);incomplete[0].finalPlaytestReport.complete=false;assert.throws(()=>verifyArtifacts(incomplete,{minimumSamples:1}),/Incomplete/);
   assert.throws(()=>verifyArtifacts([{}],{minimumSamples:1}),/Mixed|Malformed/);
 });
+
+test('verification evidence counts every 250 ms boundary',()=>{
+  const artifacts=BALANCE.match.lobbySizes.map(lobbySize=>runMatch({lobbySize,seed:'all-boundaries',matchSeconds:1}));
+  const verification=verifyArtifacts(artifacts,{minimumSamples:1});for(const artifact of artifacts)assert.deepEqual(verification.replayBoundaries[artifact.lobbySize],{total:4,verified:4,divergences:0});
+});
