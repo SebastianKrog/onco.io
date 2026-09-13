@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
+  companyFocusRegion,
   createSeededMap,
   MAP_TEMPLATES,
   regionNeighbours,
@@ -2076,6 +2077,7 @@ export class Game {
                 ? "connected"
                 : "disconnected",
         ownRegionCount: this.owned(p).length,
+        mapFocusRegionId: companyFocusRegion(this.regions, p.id),
         effectiveSpending: {
           research: p.researchSpend,
           manufacturing: p.manufacturingSpend,

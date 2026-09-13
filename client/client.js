@@ -22,6 +22,10 @@ let state = null,
   seenEventIds = new Set();
 let stateMatchId = null,
   stateVersion = 0;
+const mapViewport = { zoom: 1, offsetX: 0, offsetY: 0 };
+const MIN_ZOOM = 1,
+  MAX_ZOOM = 2.5,
+  ZOOM_STEP = 0.25;
 const send = (message) =>
   socket.readyState === WebSocket.OPEN &&
   socket.send(
@@ -210,6 +214,49 @@ canvas.addEventListener("mousemove", (event) => {
   hoveredRegion = state.regions.find((item) => inside(item, x, y))?.id ?? null;
   renderDispatchStatus(state.players.find((player) => player.id === myId));
 });
+function setMapZoom(value) {
+  const next = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, value));
+  if (next === mapViewport.zoom) return;
+  const worldCentreX =
+      (canvas.width / 2 - mapViewport.offsetX) / mapViewport.zoom,
+    worldCentreY = (canvas.height / 2 - mapViewport.offsetY) / mapViewport.zoom;
+  mapViewport.zoom = next;
+  mapViewport.offsetX = canvas.width / 2 - worldCentreX * next;
+  mapViewport.offsetY = canvas.height / 2 - worldCentreY * next;
+  if (next === MIN_ZOOM) {
+    mapViewport.offsetX = 0;
+    mapViewport.offsetY = 0;
+  }
+  render();
+}
+function centreOnCompany() {
+  if (!state) return;
+  const me = state.players.find((player) => player.id === myId),
+    region = state.regions[me?.mapFocusRegionId];
+  if (!region) return;
+  const focus = hexGeometry(region, state.map, canvas.width, canvas.height);
+  mapViewport.offsetX = canvas.width / 2 - focus.cx * mapViewport.zoom;
+  mapViewport.offsetY = canvas.height / 2 - focus.cy * mapViewport.zoom;
+  render();
+  canvas.focus();
+}
+document
+  .querySelector("#zoom-in")
+  .addEventListener("click", () => setMapZoom(mapViewport.zoom + ZOOM_STEP));
+document
+  .querySelector("#zoom-out")
+  .addEventListener("click", () => setMapZoom(mapViewport.zoom - ZOOM_STEP));
+document
+  .querySelector("#centre-company")
+  .addEventListener("click", centreOnCompany);
+canvas.addEventListener(
+  "wheel",
+  (event) => {
+    event.preventDefault();
+    setMapZoom(mapViewport.zoom + (event.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP));
+  },
+  { passive: false },
+);
 canvas.addEventListener("click", (event) => {
   if (!state) return;
   const rect = canvas.getBoundingClientRect(),
@@ -288,9 +335,9 @@ canvas.addEventListener("keydown", (event) => {
   }
 });
 const geometry = (region) =>
-  hexGeometry(region, state.map, canvas.width, canvas.height);
+  hexGeometry(region, state.map, canvas.width, canvas.height, mapViewport);
 const inside = (region, x, y) =>
-  pointInHex(region, x, y, state.map, canvas.width, canvas.height);
+  pointInHex(region, x, y, state.map, canvas.width, canvas.height, mapViewport);
 function render() {
   const me = state.players.find((player) => player.id === myId),
     telemetry = state.telemetry?.totals;
@@ -304,14 +351,21 @@ function render() {
       ? `Starts in ${Math.ceil(state.placementRemaining)}s`
       : `${String(Math.floor(state.remaining / 60)).padStart(2, "0")}:${String(Math.floor(state.remaining % 60)).padStart(2, "0")}`;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  document.querySelector("#zoom-level").textContent =
+    `${Math.round(mapViewport.zoom * 100)}%`;
+  document.querySelector("#zoom-out").disabled = mapViewport.zoom === MIN_ZOOM;
+  document.querySelector("#zoom-in").disabled = mapViewport.zoom === MAX_ZOOM;
   for (const region of state.regions) drawRegion(region);
   drawTerritoryBoundaries();
   drawConvoys();
   if (!me) {
+    document.querySelector("#centre-company").disabled = true;
     document.querySelector("#instruction").textContent =
       "Spectating this match.";
     return;
   }
+  document.querySelector("#centre-company").disabled =
+    me.mapFocusRegionId == null;
   commitment.min = state.balance.movement.commitmentMinimum;
   commitment.max = state.balance.movement.commitmentMaximum;
   commitment.step = state.balance.movement.commitmentIncrement;
