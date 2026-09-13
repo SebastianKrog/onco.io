@@ -18,7 +18,7 @@ This roadmap follows the initial bot playtest and source review. Human multiplay
 - [x] Give the player's territory a consistent, distinctive colour, with an additional selection/ownership cue that does not depend on colour alone.
 - [x] Make local supply the most prominent region number; enlarge useful labels and treatment/profile symbols.
 - [x] Reduce diagonal hatching and internal grid emphasis. Strengthen the outer borders of connected territories.
-- [ ] Add map zoom and a “Centre on my company” control.
+- [x] Add map zoom and a “Centre on my company” control.
 - [ ] Prioritise territory count, income, production, and current research in the HUD. Move balance targets, acceptance scenarios, and release diagnostics into an explicit developer view.
 
 **Done when:** a new player can find their territory, read its available supply, and identify an adjacent expansion opportunity without deciphering the sidebars. Zooming and selection remain accurate.

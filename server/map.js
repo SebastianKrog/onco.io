@@ -59,6 +59,31 @@ export function regionNeighbours(id, columns, rows) {
     .sort((a, b) => a - b);
 }
 
+// Return the owned region nearest the visual centre of a company's territory.
+// Keeping this choice authoritative means every client centres on the same
+// useful location as ownership changes.
+export function companyFocusRegion(regions, companyId) {
+  const owned = regions.filter((region) => region.ownerId === companyId);
+  if (!owned.length) return null;
+  const centre = owned.reduce(
+    (sum, region) => ({
+      column: sum.column + region.column + (region.row % 2) / 2,
+      row: sum.row + region.row,
+    }),
+    { column: 0, row: 0 },
+  );
+  centre.column /= owned.length;
+  centre.row /= owned.length;
+  return owned
+    .map((region) => ({
+      id: region.id,
+      distance:
+        (region.column + (region.row % 2) / 2 - centre.column) ** 2 +
+        (region.row - centre.row) ** 2,
+    }))
+    .sort((a, b) => a.distance - b.distance || a.id - b.id)[0].id;
+}
+
 // Canvas hex points run clockwise from the top vertex. These offsets therefore
 // map each neighbouring cell to the edge shared with it (top-right through
 // top-left). Keeping this classification server-side gives every client the

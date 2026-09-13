@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createSeededMap, MAP_TEMPLATES, REGION_PROFILES } from '../server/map.js';
+import { companyFocusRegion, createSeededMap, MAP_TEMPLATES, REGION_PROFILES } from '../server/map.js';
 import { hexGeometry, pointInHex } from '../client/hex.js';
 
 function graphDistances(regions, source) {
@@ -28,4 +28,12 @@ test('official seeded templates are repeatable and satisfy map invariants', () =
 
 test('hex geometry hit testing selects the polygon but not bounding-box corners', () => {
   for(const map of Object.values(MAP_TEMPLATES)){const region={column:Math.floor(map.columns/2),row:Math.floor(map.rows/2)},hex=hexGeometry(region,map,1120,700);assert.equal(pointInHex(region,hex.cx,hex.cy,map,1120,700),true);assert.equal(pointInHex(region,hex.cx+Math.sqrt(3)*hex.size/2-.1,hex.cy-hex.size+.1,map,1120,700),false);}
+});
+
+test('company focus and zoomed hit testing stay aligned with rendered geometry',()=>{
+  const regions=[{id:0,column:0,row:0,ownerId:'me'},{id:1,column:1,row:0,ownerId:'me'},{id:2,column:2,row:0,ownerId:'me'},{id:3,column:3,row:0,ownerId:'rival'}];
+  assert.equal(companyFocusRegion(regions,'me'),1);assert.equal(companyFocusRegion(regions,'missing'),null);
+  const map={columns:4,rows:1},viewport={zoom:2,offsetX:-100,offsetY:40},hex=hexGeometry(regions[1],map,1120,700,viewport);
+  assert.equal(pointInHex(regions[1],hex.cx,hex.cy,map,1120,700,viewport),true);
+  assert.equal(pointInHex(regions[1],hex.cx+Math.sqrt(3)*hex.size/2-.1,hex.cy-hex.size+.1,map,1120,700,viewport),false);
 });

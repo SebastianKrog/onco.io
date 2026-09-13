@@ -10,7 +10,7 @@ export function hexLayout(map, width, height, margin = 12) {
     top: (height - size * (1.5 * (map.rows - 1) + 2)) / 2,
   };
 }
-export function hexGeometry(region, map, width, height) {
+export function hexGeometry(region, map, width, height, viewport) {
   const layout = hexLayout(map, width, height),
     hexWidth = Math.sqrt(3) * layout.size;
   const cx =
@@ -18,17 +18,27 @@ export function hexGeometry(region, map, width, height) {
       hexWidth / 2 +
       (region.column + (region.row % 2) / 2) * hexWidth,
     cy = layout.top + layout.size + region.row * layout.size * 1.5;
-  const points = Array.from({ length: 6 }, (_, index) => {
+  let points = Array.from({ length: 6 }, (_, index) => {
     const angle = (Math.PI / 180) * (60 * index - 90);
     return {
       x: cx + layout.size * Math.cos(angle),
       y: cy + layout.size * Math.sin(angle),
     };
   });
-  return { cx, cy, size: layout.size, points };
+  if (!viewport) return { cx, cy, size: layout.size, points };
+  const zoom = viewport.zoom ?? 1,
+    offsetX = viewport.offsetX ?? 0,
+    offsetY = viewport.offsetY ?? 0,
+    transform = (point) => ({
+      x: point.x * zoom + offsetX,
+      y: point.y * zoom + offsetY,
+    }),
+    centre = transform({ x: cx, y: cy });
+  points = points.map(transform);
+  return { cx: centre.x, cy: centre.y, size: layout.size * zoom, points };
 }
-export function pointInHex(region, x, y, map, width, height) {
-  const { points } = hexGeometry(region, map, width, height);
+export function pointInHex(region, x, y, map, width, height, viewport) {
+  const { points } = hexGeometry(region, map, width, height, viewport);
   let inside = false;
   for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
     const a = points[i],
